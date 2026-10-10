@@ -75,6 +75,13 @@ final class AppModel: ObservableObject {
     @Published var chatGPTModelName: String {
         didSet { UserDefaults.standard.set(chatGPTModelName, forKey: "chatGPTModelName") }
     }
+    @Published var claudeModelName: String {
+        didSet { UserDefaults.standard.set(claudeModelName, forKey: "claudeModelName") }
+    }
+    @Published var claudeExecutablePath: String {
+        didSet { UserDefaults.standard.set(claudeExecutablePath, forKey: "claudeExecutablePath") }
+    }
+    @Published private(set) var claudeStatus: ClaudeCodeStatus?
     @Published private(set) var chatGPTProfiles: [ChatGPTProfile] = []
     @Published private(set) var activeChatGPTClientID = ""
     @Published private(set) var chatGPTModels: [ChatGPTModel] = []
@@ -84,7 +91,7 @@ final class AppModel: ObservableObject {
     private lazy var chatGPTAuth = ChatGPTAuthService()
 
     var activeChatGPTProfile: ChatGPTProfile? { chatGPTProfiles.first { $0.clientID == activeChatGPTClientID } }
-    var billingLabel: String { billingMode == .chatGPT ? "ChatGPT 구독 사용량" : "API 키 · 별도 결제" }
+    var billingLabel: String { billingMode.title }
     var isWorking: Bool { status == .selecting || status == .analyzing }
     @Published private(set) var resultBillingLabel = ""
 
@@ -127,13 +134,15 @@ final class AppModel: ObservableObject {
         let effort: String?
         let attachImage: Bool
         let additionalInstructions: String
+        let claudeExecutablePath: String
     }
 
     private var requestOptions: RequestOptions {
         .init(mode: billingMode, model: currentModelName, language: codeLanguage,
-              effort: selectedReasoningEffort, attachImage: attachImageToSelection,
-              additionalInstructions: additionalInstructions)
+              effort: selectedReasoningEffort, attachImage: attachImageToSelection && billingMode != .claudeCode,
+              additionalInstructions: additionalInstructions, claudeExecutablePath: claudeExecutablePath)
     }
+    private var claudeLoginTask: Task<Void, Error>?
     private var started = false
 
     init(startServices: Bool = true, openAIService: OpenAIService = OpenAIService(),
@@ -157,6 +166,8 @@ final class AppModel: ObservableObject {
         modelName = UserDefaults.standard.string(forKey: Self.modelKey) ?? "gpt-4.1-mini"
         billingMode = UserDefaults.standard.string(forKey: "billingMode").flatMap(BillingMode.init(rawValue:)) ?? .chatGPT
         chatGPTModelName = UserDefaults.standard.string(forKey: "chatGPTModelName") ?? ""
+        claudeModelName = UserDefaults.standard.string(forKey: "claudeModelName") ?? ""
+        claudeExecutablePath = UserDefaults.standard.string(forKey: "claudeExecutablePath") ?? ""
         if startServices {
             syncChatGPTProfiles()
             start()
@@ -193,12 +204,10 @@ final class AppModel: ObservableObject {
             try self.checkRequest(id)
             self.capturedImage = NSImage(data: capture)
             self.requestProgress?.prepareConnection()
-            let credential = try await self.inferenceCredential(mode: options.mode, model: options.model)
+            let provider = try await self.inferenceProvider(options: options, id: id)
             try self.checkRequest(id)
             self.beginInference(id: id, options: options, silent: false)
-            let response = try await self.openAIService.explain(
-                imageData: capture, credential: credential, model: options.model,
-                reasoningEffort: options.effort, onProgress: self.progressHandler(id: id))
+            let response = try await provider.explain(imageData: capture)
             try self.checkRequest(id)
             self.explanation = response
         }
@@ -214,13 +223,10 @@ final class AppModel: ObservableObject {
             // Keep the source selection before authentication, capture, or UI activation changes focus.
             let image = try await self.optionalImage(id: id, options: options, silent: false)
             self.requestProgress?.prepareConnection()
-            let credential = try await self.inferenceCredential(mode: options.mode, model: options.model)
+            let provider = try await self.inferenceProvider(options: options, id: id, image: image)
             try self.checkRequest(id)
             self.beginInference(id: id, options: options, silent: false)
-            let response = try await self.openAIService.explain(
-                selectedText: text, credential: credential, model: options.model,
-                reasoningEffort: options.effort, onProgress: self.progressHandler(id: id),
-                imageData: image, additionalInstructions: options.additionalInstructions)
+            let response = try await provider.explain(selectedText: text)
             try self.checkRequest(id)
             self.explanation = response
         }
@@ -240,13 +246,10 @@ final class AppModel: ObservableObject {
                     try InputAttachment.validate(text: text, additionalInstructions: options.additionalInstructions)
                     let image = try await self.optionalImage(id: id, options: options, silent: true)
                     self.requestProgress?.prepareConnection()
-                    let credential = try await self.inferenceCredential(mode: options.mode, model: options.model)
+                    let provider = try await self.inferenceProvider(options: options, id: id, image: image)
                     try self.checkRequest(id)
                     self.beginInference(id: id, options: options, silent: true)
-                    return try await self.openAIService.generateCode(
-                        selectedText: text, language: options.language, credential: credential, model: options.model,
-                        reasoningEffort: options.effort, onProgress: self.progressHandler(id: id),
-                        imageData: image, additionalInstructions: options.additionalInstructions)
+                    return try await provider.generateCode(selectedText: text, language: options.language)
                 }, write: self.clipboardWriter
             )
             let codeID = try await workflow.run(onSelection: { text in
@@ -287,7 +290,7 @@ final class AppModel: ObservableObject {
         let snapshot = requestOptions
         let options = RequestOptions(mode: snapshot.mode, model: snapshot.model, language: snapshot.language,
                                      effort: snapshot.effort, attachImage: attachImage ?? snapshot.attachImage,
-                                     additionalInstructions: snapshot.additionalInstructions)
+                                     additionalInstructions: snapshot.additionalInstructions, claudeExecutablePath: snapshot.claudeExecutablePath)
         let id = UUID()
         activeRequestID = id
         progressRequestID = id
@@ -304,6 +307,7 @@ final class AppModel: ObservableObject {
             do {
                 try await operation(id, options)
                 try checkRequest(id)
+                if options.mode == .claudeCode { requestProgress?.record(.firstText) }
                 requestProgress?.record(.completed)
                 requestProgress?.finish(.completed)
                 status = .ready
@@ -366,7 +370,7 @@ final class AppModel: ObservableObject {
     private func optionalImage(id: UUID, options: RequestOptions, silent: Bool) async throws -> Data? {
         guard options.attachImage else { return nil }
         try checkRequest(id)
-        guard ModelCapabilities.imageInput.contains(options.model) else { throw InputValidationError.unsupportedImageModel }
+        guard options.mode != .claudeCode, ModelCapabilities.imageInput.contains(options.model) else { throw InputValidationError.unsupportedImageModel }
         requestProgress?.stage = .selectingImage
         if silent { quickCopyMessage = "첨부할 그림 영역을 직접 선택하세요 · Esc로 취소" }
         let image = try await captureImage(promptForPermission: !silent)
@@ -431,7 +435,33 @@ final class AppModel: ObservableObject {
     }
 
     var currentModelName: String {
-        (billingMode == .chatGPT ? chatGPTModelName : modelName).trimmingCharacters(in: .whitespacesAndNewlines)
+        let selected: String
+        switch billingMode {
+        case .chatGPT: selected = chatGPTModelName
+        case .apiKey: selected = modelName
+        case .claudeCode: selected = claudeModelName
+        }
+        return selected.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var claudeCode: ClaudeCodeService {
+        ClaudeCodeService(executablePath: claudeExecutablePath, model: claudeModelName)
+    }
+
+    private func inferenceProvider(options: RequestOptions, id: UUID, image: Data? = nil) async throws -> any InferenceProvider {
+        try checkRequest(id)
+        if options.mode == .claudeCode {
+            let provider = ClaudeCodeService(executablePath: options.claudeExecutablePath, model: options.model,
+                                             additionalInstructions: options.additionalInstructions)
+            try await provider.checkInstalled()
+            try checkRequest(id)
+            return provider
+        }
+        let credential = try await inferenceCredential(mode: options.mode, model: options.model)
+        try checkRequest(id)
+        return OpenAIProvider(service: openAIService, credential: credential, model: options.model,
+                              reasoningEffort: options.effort, onProgress: progressHandler(id: id),
+                              imageData: image, additionalInstructions: options.additionalInstructions)
     }
 
     private func inferenceCredential(mode: BillingMode, model: String) async throws -> InferenceCredential {
@@ -520,6 +550,41 @@ final class AppModel: ObservableObject {
             connectionMessage = revoked ? "ChatGPT 연결에서 로그아웃했습니다." : "앱에서 로그아웃했습니다. 서버의 연결 해제는 확인하지 못했으니 ChatGPT 설정에서도 연결을 해제해 주세요."
         } catch { connectionMessage = error.localizedDescription }
     }
+
+    func refreshClaudeStatus() async {
+        guard !connectionBusy else { return }
+        connectionBusy = true
+        defer { connectionBusy = false }
+        do {
+            claudeStatus = try await claudeCode.status()
+            connectionMessage = claudeStatus?.loggedIn == true ? nil : ClaudeCodeError.notLoggedIn.localizedDescription
+        } catch {
+            claudeStatus = nil
+            connectionMessage = error.localizedDescription
+        }
+    }
+
+    func signInWithClaude() async {
+        guard !connectionBusy, !isWorking else { return }
+        connectionBusy = true
+        connectionMessage = "브라우저에서 Claude 로그인을 완료해 주세요. Claude Code가 로그인을 처리합니다."
+        let provider = claudeCode
+        let task = Task { try await provider.login() }
+        claudeLoginTask = task
+        do {
+            try await task.value
+            claudeLoginTask = nil
+            connectionBusy = false
+            await refreshClaudeStatus()
+            if claudeStatus?.loggedIn == true { connectionMessage = "Claude 구독 사용이 연결되었습니다." }
+        } catch {
+            claudeLoginTask = nil
+            connectionBusy = false
+            connectionMessage = error is CancellationError ? "로그인을 취소했습니다." : error.localizedDescription
+        }
+    }
+
+    func cancelClaudeSignIn() { claudeLoginTask?.cancel() }
 
     private func syncChatGPTProfiles() {
         chatGPTProfiles = chatGPTAuth.profiles

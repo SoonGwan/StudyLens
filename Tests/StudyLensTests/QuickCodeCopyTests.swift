@@ -107,7 +107,7 @@ final class QuickCodeCopyTests: XCTestCase {
     }
 
     func testDedicatedPromptRespectsExplicitLanguageAndRequestsOneCodeBlock() {
-        let instructions = OpenAIService.codeInstructions(language: "Java")
+        let instructions = StudyPrompt.codeInstructions(language: "Java")
         XCTAssertTrue(instructions.contains("기본 언어 Java"))
         XCTAssertTrue(instructions.contains("정확히 하나의 Markdown 코드 블록"))
         XCTAssertTrue(instructions.contains("사용자가 본문에서 코드 언어를 지정하면 그 언어를 따르고"))

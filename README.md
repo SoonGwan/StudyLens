@@ -14,9 +14,11 @@ StudyLens는 macOS 메뉴바에서 실행되는 개인 학습 보조 MVP입니�
 
 - **추론 강도:** 설정 → 추론 강도에서 빠르게(low)·균형(medium)·깊게(high)·모델 기본값을 선택합니다. 모델·연결 방식별로 저장하며 요청 시작 시 고정합니다. 지원이 확인되지 않은 모델에는 `reasoning`을 생략합니다.
 - **진행과 취소:** 메뉴에서 입력 읽기·그림 선택·연결 준비·응답 대기·작성·복사 단계와 총 경과 시간을 확인하고 현재 요청을 취소할 수 있습니다. 요청 시간 확인에는 첫 SSE 이벤트와 첫 출력 시간이 따로 표시됩니다. 자동 재시도는 하지 않습니다.
-- **그림 첨부:** 설정 → 선택 텍스트 입력에서 첨부를 켜면 텍스트를 읽은 뒤 사용자가 직접 선택한 그림 영역 한 장을 같은 요청에 보냅니다. 추가 지시는 선택 사항입니다. 기본은 첨부 꺼짐입니다.
+- **그림 첨부:** OpenAI 연결에서 설정 → 선택 텍스트 입력에서 첨부를 켜면 텍스트를 읽은 뒤 사용자가 직접 선택한 그림 영역 한 장을 같은 요청에 보냅니다. 추가 지시는 선택 사항입니다. 기본은 첨부 꺼짐입니다.
 - **권한:** 설정에서 현재 실행 중인 앱의 접근성·화면 기록 접근 가능 여부와 업데이트 후 복구 절차를 확인합니다. 빌드 시 설치된 서명 인증서를 명시적으로 선택할 수 있습니다.
 - **복사:** 단독 Java 원문의 CRLF·주석 처리와 빈 블록 인식을 수정했습니다. Java·Python·C++의 합성 사례 37개를 같은 표시 데이터·전체 복사·개별 코드 복사·자동 복사 경로에 적용합니다. 코드 복사 성공은 컴파일 성공·정답 보장이 아닙니다.
+
+Claude 연결은 기존 기본 추론 설정과 영역 캡처를 유지하며 추가 지시를 지원합니다. 선택 텍스트와 그림을 함께 첨부하는 옵션은 현재 OpenAI 연결에서 지원합니다. Claude는 전체 CLI 결과를 받은 시간을 기록하고 첫 SSE 이벤트 시간은 표시하지 않습니다.
 
 [검증 결과와 남은 실기기 확인](docs/issue-verification.md)에 이슈 #1~#5별 근거와 제한을 정리했습니다. 이 릴리스는 이슈 #6의 Windows/Electron 전환을 포함하지 않습니다.
 
@@ -24,7 +26,7 @@ StudyLens는 macOS 메뉴바에서 실행되는 개인 학습 보조 MVP입니�
 
 - macOS 13 이상
 - Xcode 15 이상 또는 해당 Command Line Tools
-- 구독 연동을 지원하는 ChatGPT Plus·Pro 계정, 또는 OpenAI API 키
+- 구독 연동을 지원하는 ChatGPT Plus·Pro 계정, 로그인된 Claude Code(Claude Pro·Max 구독), 또는 OpenAI API 키
 
 ## ChatGPT 구독 사용량으로 사용하기
 
@@ -43,6 +45,19 @@ StudyLens 0.2는 공식 **Sign in with ChatGPT**를 사용합니다. API 키 없
 구독용 요청은 공식 `https://api.openai.com/v1/responses`로 보내며 `store: false`, `stream: true`를 적용합니다. 응답 완료 이벤트를 받은 경우에만 결과와 복사 버튼을 활성화합니다.
 
 공식 근거: [연동 개요](https://developers.openai.com/siwc/token-sharing-open-source), [로그인](https://developers.openai.com/siwc/token-sharing-open-source/sign-in), [모델과 추론](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference), [현재 제약](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations).
+
+## Claude 구독 사용량으로 사용하기 (Claude Code)
+
+Anthropic은 서드파티 앱용 구독 로그인(OAuth)을 제공하지 않습니다. 그래서 StudyLens는 Claude 토큰을 직접 다루지 않고, 이 Mac에 설치되어 로그인된 **Claude Code**(`claude` CLI)를 헤드리스 모드(`claude -p`)로 실행해 요청합니다. 요청은 Claude Code와 같은 구독 사용 한도를 공유합니다.
+
+1. [Claude Code](https://code.claude.com)를 설치합니다.
+2. 설정의 **사용 방식**에서 **Claude 구독 사용량 (Claude Code)**를 선택합니다.
+3. 로그인되어 있지 않으면 **Claude 로그인**을 누릅니다. Claude Code가 브라우저 로그인을 처리합니다. 진행되지 않으면 터미널에서 `claude auth login`을 실행하세요.
+4. 모델(Claude Code 기본값·Opus·Sonnet·Haiku)을 선택하고 단축키로 요청합니다.
+
+- `claude` 위치는 `~/.local/bin`, `~/.claude/local`, Homebrew 경로, 로그인 셸의 `PATH` 순으로 찾습니다. 찾지 못하면 설정에 실행 파일 경로를 직접 입력하세요.
+- 사용자의 Claude Code 설정·MCP 서버·스킬·도구를 불러오지 않고(`--setting-sources ""`, `--strict-mcp-config`, `--tools ""`), 세션 기록도 남기지 않습니다(`--no-session-persistence`).
+- StudyLens는 Claude Code의 인증 정보를 읽거나 저장하지 않습니다. 개인 Mac에서 본인 계정으로 쓰는 용도이며, 다른 사람에게 Claude 로그인을 제공하는 배포용 기능이 아닙니다.
 
 ## 앱 번들 만들기 및 설치
 
@@ -160,7 +175,9 @@ swift build -c release
 - `StudyLensApp.swift`: SwiftUI 메뉴바 앱 및 결과/설정 창
 - `AppModel.swift`: 캡처 → 분석 → 확인 → 복사 상태 흐름
 - `ScreenCaptureService.swift`: macOS 대화형 영역 선택 캡처
-- `OpenAIService.swift`: Responses API 이미지 분석
+- `InferenceProvider.swift`: 백엔드 공통 인터페이스(`InferenceProvider`)와 공용 프롬프트(`StudyPrompt`)
+- `OpenAIService.swift`: Responses API 이미지 분석 (`OpenAIProvider`로 연결)
+- `ClaudeCodeService.swift`: 로컬 Claude Code CLI 실행 (`InferenceProvider` 구현)
 - `ChatGPTAuthService.swift`: 공식 ChatGPT 로그인, 계정 선택, 토큰 갱신과 로그아웃
 - `OAuthLoopbackServer.swift`: 로그인 중에만 열리는 로컬 콜백
 - `OIDCIdentity.swift`: 로그인 서명과 계정 정보 검증

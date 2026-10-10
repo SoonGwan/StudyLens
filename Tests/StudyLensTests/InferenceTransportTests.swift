@@ -72,6 +72,19 @@ final class InferenceTransportTests: XCTestCase {
         XCTAssertEqual(result, "API 설명")
     }
 
+    func testOpenAIProviderForwardsCredentialAndModel() async throws {
+        MockInferenceProtocol.handler = { request in
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-key")
+            let payload = try Self.body(of: request)
+            XCTAssertEqual(payload["model"] as? String, "test-model")
+            XCTAssertEqual(payload["instructions"] as? String, StudyPrompt.codeInstructions(language: "Go"))
+            return (200, "application/json", Data("{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"코드\"}]}]}".utf8))
+        }
+        let provider: any InferenceProvider = OpenAIProvider(service: makeService(), credential: .init(token: "test-key", mode: .apiKey), model: "test-model")
+        let result = try await provider.generateCode(selectedText: "문제", language: "Go")
+        XCTAssertEqual(result, "코드")
+    }
+
     func testSelectedTextKeepsTrailingUserRequestVerbatim() async throws {
         let selection = "문제 설명\nex1-1.png\n제한사항\n이거 Java 코드만 만들어줘"
         MockInferenceProtocol.handler = { request in
@@ -82,7 +95,7 @@ final class InferenceTransportTests: XCTestCase {
             let content = try XCTUnwrap(input[0]["content"] as? [[String: Any]])
             XCTAssertEqual(content.count, 1)
             XCTAssertEqual(content[0]["text"] as? String, selection)
-            XCTAssertEqual(payload["instructions"] as? String, OpenAIService.instructions)
+            XCTAssertEqual(payload["instructions"] as? String, StudyPrompt.instructions)
             return (200, "application/json", Data("{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"class Solution {}\"}]}]}".utf8))
         }
         let result = try await makeService().explain(selectedText: selection, credential: .init(token: "test-key", mode: .apiKey), model: "test-model")
@@ -109,7 +122,7 @@ final class InferenceTransportTests: XCTestCase {
         let selection = "문제\n이거 Python 코드로 만들어줘"
         MockInferenceProtocol.handler = { request in
             let payload = try Self.body(of: request)
-            XCTAssertEqual(payload["instructions"] as? String, OpenAIService.codeInstructions(language: "Java"))
+            XCTAssertEqual(payload["instructions"] as? String, StudyPrompt.codeInstructions(language: "Java"))
             XCTAssertEqual(payload["max_output_tokens"] as? Int, 12000)
             let input = try XCTUnwrap(payload["input"] as? [[String: Any]])
             let content = try XCTUnwrap(input[0]["content"] as? [[String: Any]])
@@ -141,7 +154,7 @@ final class InferenceTransportTests: XCTestCase {
 
     func testReasoningEffortInAllInputRoutesAndBothBillingModes() async throws {
         let png = try Self.png()
-        for mode in BillingMode.allCases {
+        for mode in [BillingMode.apiKey, .chatGPT] {
             for effort in ["low", "medium", "high"] {
                 var requests = 0
                 MockInferenceProtocol.handler = { request in
@@ -154,10 +167,11 @@ final class InferenceTransportTests: XCTestCase {
                     return (200, "text/event-stream", Data(Self.completedSSE.utf8))
                 }
                 let credential = InferenceCredential(token: "synthetic", mode: mode)
-                let service = makeService()
-                _ = try await service.explain(imageData: png, credential: credential, model: "gpt-6.1-sol", reasoningEffort: effort)
-                _ = try await service.explain(selectedText: "본문", credential: credential, model: "gpt-6.1-sol", reasoningEffort: effort)
-                _ = try await service.generateCode(selectedText: "본문", language: "Java", credential: credential, model: "gpt-6.1-sol", reasoningEffort: effort)
+                let provider: any InferenceProvider = OpenAIProvider(service: makeService(), credential: credential,
+                                                                     model: "gpt-6.1-sol", reasoningEffort: effort)
+                _ = try await provider.explain(imageData: png)
+                _ = try await provider.explain(selectedText: "본문")
+                _ = try await provider.generateCode(selectedText: "본문", language: "Java")
                 XCTAssertEqual(requests, 3)
             }
         }
@@ -175,7 +189,7 @@ final class InferenceTransportTests: XCTestCase {
 
     func testTextInstructionAndImageAreOneUserMessageInBothModes() async throws {
         let png = try Self.png()
-        for mode in BillingMode.allCases {
+        for mode in [BillingMode.apiKey, .chatGPT] {
             MockInferenceProtocol.handler = { request in
                 let body = try Self.body(of: request)
                 let inputs = try XCTUnwrap(body["input"] as? [[String: Any]])
@@ -189,8 +203,11 @@ final class InferenceTransportTests: XCTestCase {
                 return (200, "text/event-stream", Data(Self.completedSSE.utf8))
             }
             let credential = InferenceCredential(token: "synthetic", mode: mode)
-            _ = try await makeService().explain(selectedText: "본문\nex1-1.png\nPython으로 만들어줘", credential: credential, model: "gpt-6.1-sol", imageData: png, additionalInstructions: "그림의 화살표 방향을 사용해 줘")
-            _ = try await makeService().generateCode(selectedText: "본문\nex1-1.png\nPython으로 만들어줘", language: "Java", credential: credential, model: "gpt-6.1-sol", imageData: png, additionalInstructions: "그림의 화살표 방향을 사용해 줘")
+            let provider: any InferenceProvider = OpenAIProvider(service: makeService(), credential: credential,
+                                                                 model: "gpt-6.1-sol", imageData: png,
+                                                                 additionalInstructions: "그림의 화살표 방향을 사용해 줘")
+            _ = try await provider.explain(selectedText: "본문\nex1-1.png\nPython으로 만들어줘")
+            _ = try await provider.generateCode(selectedText: "본문\nex1-1.png\nPython으로 만들어줘", language: "Java")
         }
     }
 

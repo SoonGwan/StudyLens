@@ -4,9 +4,15 @@ import Foundation
 import Security
 
 enum BillingMode: String, CaseIterable, Identifiable {
-    case chatGPT, apiKey
+    case chatGPT, claudeCode, apiKey
     var id: String { rawValue }
-    var title: String { self == .chatGPT ? "ChatGPT 구독 사용량" : "API 키 · 별도 결제" }
+    var title: String {
+        switch self {
+        case .chatGPT: return "ChatGPT 구독 사용량"
+        case .claudeCode: return "Claude 구독 사용량 (Claude Code)"
+        case .apiKey: return "API 키 · 별도 결제"
+        }
+    }
 }
 
 struct ChatGPTCredentials: Codable {

@@ -2,7 +2,9 @@
 
 대상은 GitHub 이슈 #1~#5입니다. 로컬 구현과 합성 입력·가짜 네트워크 검증을 진행했으며, 실제 사용자 로그인/AI 요청·인증서 발급·권한 변경은 실행하지 않았습니다. 원격 이슈를 완료로 닫거나 앱을 설치·배포하지 않았습니다.
 
-자동 검증: `swift test` 66개 통과(실패 0), `./build-app.sh` 릴리스 빌드 성공, 생성 앱의 `codesign --verify --strict` 통과, `zsh -n build-app.sh` 및 `git diff --check` 통과. 앱 버전은 0.2.6/빌드 8입니다.
+자동 검증: `swift test` 76개 통과(실패 0), `./build-app.sh` 릴리스 빌드 성공, 생성 앱의 `codesign --verify --strict` 통과, `zsh -n build-app.sh` 및 `git diff --check` 통과. 앱 버전은 0.2.6/빌드 8입니다.
+
+최신 `main`의 공통 `InferenceProvider`와 기존 Claude 연결을 통합했습니다. 새 옵션은 요청별 `OpenAIProvider`에 전달하고 프롬프트는 `StudyPrompt`를 공유합니다. Claude 텍스트 요청은 별도 가짜 실행 파일로 연결 방식·추가 지시·클립보드 경로를 검증하며, 실제 Claude CLI나 로그인은 실행하지 않았습니다. Claude의 추론 설정은 기존 기본값을 유지하고 선택 텍스트+그림 첨부는 현재 OpenAI 두 연결 방식에만 적용합니다. OpenAI에서 켠 첨부 옵션은 Claude 텍스트 요청에 적용하지 않습니다. Claude는 전체 CLI 결과를 받은 시점의 첫 출력·완료만 기록하며 SSE 이벤트 시간은 표시하지 않습니다.
 
 ## #1 추론 강도
 
