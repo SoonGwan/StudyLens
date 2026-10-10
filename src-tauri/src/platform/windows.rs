@@ -95,11 +95,13 @@ static PENDING: Mutex<Option<Pending>> = Mutex::new(None);
 /// crops the frozen image. Esc or a click without dragging cancels.
 pub async fn capture_region(app: &tauri::AppHandle, _prompt: bool) -> Result<Vec<u8>, CaptureError> {
     let failed = |e: String| CaptureError::LaunchFailed(e);
-    let monitors = xcap::Monitor::all().map_err(|e| failed(e.to_string()))?;
-    let monitor = monitors.into_iter().find(|m| m.is_primary().unwrap_or(false)).ok_or(CaptureError::Empty)?;
-    let image = monitor.capture_image().map_err(|e| failed(e.to_string()))?;
-    let (x, y) = (monitor.x().unwrap_or(0), monitor.y().unwrap_or(0));
-    let scale = monitor.scale_factor().unwrap_or(1.0) as f64;
+    // xcap handles aren't Send: finish with them before the first await.
+    let (image, x, y, scale) = {
+        let monitors = xcap::Monitor::all().map_err(|e| failed(e.to_string()))?;
+        let monitor = monitors.into_iter().find(|m| m.is_primary().unwrap_or(false)).ok_or(CaptureError::Empty)?;
+        let image = monitor.capture_image().map_err(|e| failed(e.to_string()))?;
+        (image, monitor.x().unwrap_or(0), monitor.y().unwrap_or(0), monitor.scale_factor().unwrap_or(1.0) as f64)
+    };
 
     let mut png = Vec::new();
     image::DynamicImage::ImageRgba8(image.clone())

@@ -63,7 +63,8 @@
   gap: 6px;
 }
 
-.row-control input {
+.row-control input[type="text"],
+.row-control input[type="password"] {
   width: 220px;
 }
 

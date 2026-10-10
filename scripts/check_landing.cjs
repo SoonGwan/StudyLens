@@ -99,7 +99,7 @@ const report = name => console.log('PASS ' + name);
     await page.waitForFunction(() => document.getElementById('install-copy-status').textContent.includes('복사했습니다'));
     await page.evaluate(() => { window.copyRequests[3].reject(new Error('old denial')); });
     assert.equal(await page.locator('#install-copy-status').textContent(),'설치 명령을 복사했습니다.');
-    assert.match(await page.evaluate(() => window.copyRequests[4].text),/git clone https:\/\/github.com\/SoonGwan\/StudyLens.git\ncd StudyLens\n\.\/build-app.sh\nopen .build/);
+    assert.match(await page.evaluate(() => window.copyRequests[4].text),/git clone https:\/\/github.com\/SoonGwan\/StudyLens.git\ncd StudyLens\nnpm ci\nnpm run app:build\nopen src-tauri\/target\/release\/bundle\/dmg/);
     report('repeated install copy: newest result survives old failure');
     assert.deepEqual(errors,[]);
     assert.deepEqual(requests.filter(url=>new URL(url).origin!==new URL(base).origin),[]);

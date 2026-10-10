@@ -48,6 +48,8 @@ fn permission_message() -> &'static str {
 }
 
 impl SelectionError {
+    /// Maps the macOS helper's error codes.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub fn from_code(code: &str) -> Self {
         match code {
             "permissionDenied" => Self::PermissionDenied,

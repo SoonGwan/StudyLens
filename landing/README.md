@@ -12,11 +12,11 @@ Questionable Hires 방향을 바탕으로 Montage 색상과 전용 캐릭터 렌
 - `index.html`: 한국어 본문, 링크, 메타데이터, 기능·설치·연결·FAQ.
 - `app.js`: 고정 예시와 단계별 데모, 사용자가 누르는 복사 버튼.
 - `style.css`: Montage 토큰, 반응형 레이아웃, 키보드 포커스와 모션 감소.
-- [브랜드 원본·재생성 안내](../brand/README.md): 캐릭터, 실제 SwiftUI 결과 화면, OG, 아이콘.
+- [브랜드 원본·재생성 안내](../brand/README.md): 캐릭터, 실제 앱 결과 화면, OG, 아이콘.
 
-버전은 빌드 시 `AppBundle/Info.plist`에서 읽습니다. 플랫폼·릴리스·연결 설명은
-README와 구현을 함께 확인해 수정하세요. 2026-10-10 기준 기본 브랜치는 macOS
-SwiftUI 0.2.6, 공개 GitHub Release 없음, Windows/Tauri 전환은 #9 작업 중입니다.
+버전은 빌드 시 `src-tauri/tauri.conf.json`에서 읽습니다. 플랫폼·릴리스·연결 설명은
+README와 구현을 함께 확인해 수정하세요. 앱은 Tauri 2(macOS·Windows)이며, Windows는
+컴파일만 확인했고 공개 GitHub Release는 아직 없습니다.
 속도·메모리 수치나 모든 앱의 호환성을 주장하지 않습니다.
 
 ## 빌드와 미리보기
