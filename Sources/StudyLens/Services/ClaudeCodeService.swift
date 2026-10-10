@@ -152,6 +152,7 @@ struct ClaudeCodeService {
         if let cached = cachedExecutable.value, fileManager.isExecutableFile(atPath: cached.path) { return cached }
         let home = fileManager.homeDirectoryForCurrentUser.path
         let candidates = ["\(home)/.local/bin/claude", "\(home)/.claude/local/claude", "/opt/homebrew/bin/claude", "/usr/local/bin/claude"]
+            + versionManagerCandidates(home: home)
         let found = candidates.first { fileManager.isExecutableFile(atPath: $0) } ?? shellLookup()
         guard let found else { throw ClaudeCodeError.notInstalled }
         let url = URL(fileURLWithPath: found)
@@ -161,19 +162,38 @@ struct ClaudeCodeService {
 
     private static let cachedExecutable = LockedValue<URL?>(nil)
 
-    private static func shellLookup() -> String? {
+    /// Version managers such as nvm install global packages per Node version.
+    static func versionManagerCandidates(home: String) -> [String] {
+        let fileManager = FileManager.default
+        let nvmRoot = "\(home)/.nvm/versions/node"
+        let nvm = ((try? fileManager.contentsOfDirectory(atPath: nvmRoot)) ?? [])
+            .sorted { $0.compare($1, options: .numeric) == .orderedDescending }
+            .map { "\(nvmRoot)/\($0)/bin/claude" }
+        return nvm + ["\(home)/.volta/bin/claude", "\(home)/.bun/bin/claude", "\(home)/.npm-global/bin/claude"]
+    }
+
+    /// Non-interactive: an interactive shell without a terminal can block indefinitely.
+    private static func shellLookup(timeout: TimeInterval = 5) -> String? {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let process = Process()
         let pipe = Pipe()
         process.executableURL = URL(fileURLWithPath: shell)
-        process.arguments = ["-lic", "command -v claude"]
+        process.arguments = ["-lc", "command -v claude"]
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
         process.standardInput = FileHandle.nullDevice
         guard (try? process.run()) != nil else { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        return String(decoding: data, as: UTF8.self)
+        let output = LockedValue(Data())
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            output.value = pipe.fileHandleForReading.readDataToEndOfFile()
+            done.signal()
+        }
+        guard done.wait(timeout: .now() + timeout) == .success else {
+            process.terminate()
+            return nil
+        }
+        return String(decoding: output.value, as: UTF8.self)
             .split(whereSeparator: \.isNewline)
             .map(String.init)
             .last { $0.hasPrefix("/") && FileManager.default.isExecutableFile(atPath: $0) }

@@ -75,6 +75,17 @@ final class ClaudeCodeServiceTests: XCTestCase {
         XCTAssertEqual(result, "받음")
     }
 
+    func testNVMCandidatesPreferNewestNodeVersion() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: home) }
+        for version in ["v9.0.0", "v22.23.2", "v18.1.0"] {
+            try FileManager.default.createDirectory(at: home.appendingPathComponent(".nvm/versions/node/\(version)/bin"), withIntermediateDirectories: true)
+        }
+        let candidates = ClaudeCodeService.versionManagerCandidates(home: home.path)
+        XCTAssertEqual(candidates.prefix(3).map { URL(fileURLWithPath: $0).deletingLastPathComponent().deletingLastPathComponent().lastPathComponent },
+                       ["v22.23.2", "v18.1.0", "v9.0.0"])
+    }
+
     func testMissingConfiguredExecutableIsReported() {
         XCTAssertThrowsError(try ClaudeCodeService.locateExecutable(override: "/nonexistent/claude")) { error in
             guard case ClaudeCodeError.notInstalled = error else { return XCTFail("\(error)") }
