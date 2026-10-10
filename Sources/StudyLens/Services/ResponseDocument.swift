@@ -19,9 +19,9 @@ struct ResponseDocument {
         var fence: (character: Character, count: Int, language: String)?
 
         func flush(language: String?, closedFence: Bool = false) {
-            guard !lines.isEmpty else { return }
+            guard !lines.isEmpty || language != nil else { return }
             var text = lines.joined(separator: "\n")
-            if closedFence { text += "\n" }
+            if closedFence && !lines.isEmpty { text += "\n" }
             if language != nil || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 result.append(Block(id: result.count, text: text, language: language, isComplete: language == nil || closedFence))
             }

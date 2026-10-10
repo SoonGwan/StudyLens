@@ -32,6 +32,9 @@ struct ResultView: View {
                     }
 
                     content
+                    if let progress = model.requestProgress {
+                        RequestProgressView(progress: progress, isWorking: model.isWorking, cancel: model.cancelCurrentRequest)
+                    }
                 }
                 .padding(22)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -76,6 +79,9 @@ struct ResultView: View {
                 Text("이 오류는 AI 요청 전에 발생했습니다. 로그인이나 사용량 문제는 아닙니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            } else if model.hasInputError {
+                Text("입력·권한을 확인해 주세요. 이 오류는 로그인·사용량 오류가 아닙니다.")
+                    .font(.caption).foregroundStyle(.secondary)
             } else if model.billingMode == .chatGPT && model.explanation.isEmpty {
                 Link("ChatGPT 사용량 관리", destination: URL(string: "https://chatgpt.com/settings/usage")!)
             }

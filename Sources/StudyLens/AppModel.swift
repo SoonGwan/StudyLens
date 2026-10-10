@@ -36,6 +36,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var capturedImage: NSImage?
     @Published private(set) var errorMessage: String?
     @Published private(set) var hasSelectionError = false
+    @Published private(set) var hasInputError = false
     @Published private(set) var copied = false
     @Published private(set) var copiedCodeID: Int?
     @Published private(set) var quickCopyMessage: String?
@@ -91,10 +92,64 @@ final class AppModel: ObservableObject {
     private let hotKeyService = HotKeyService()
     private let captureService = ScreenCaptureService()
     private let selectedTextService = SelectedTextService()
-    private let openAIService = OpenAIService()
+    private let openAIService: OpenAIService
+    private let selectionReader: ((Bool) async throws -> String)?
+    private let imageCapturer: ((Bool) async throws -> Data)?
+    private let credentialProvider: ((BillingMode, String) async throws -> InferenceCredential)?
+    private let clipboardWriter: (String) -> Bool
+    private var activeRequestID: UUID?
+    private var progressRequestID: UUID?
+    private var activeRequestTask: Task<Void, Never>?
+    @Published private(set) var requestProgress: RequestProgress?
+    @Published var attachImageToSelection: Bool {
+        didSet { UserDefaults.standard.set(attachImageToSelection, forKey: "attachImageToSelection") }
+    }
+    @Published var additionalInstructions: String {
+        didSet { UserDefaults.standard.set(additionalInstructions, forKey: "additionalInstructions") }
+    }
+    private let reasoningSettings: ReasoningSettings
+    var reasoningPreference: ReasoningPreference {
+        get { reasoningSettings.preference(model: currentModelName, mode: billingMode) }
+        set {
+            guard !isWorking else { return }
+            objectWillChange.send()
+            reasoningSettings.set(newValue, model: currentModelName, mode: billingMode)
+        }
+    }
+    var selectedReasoningEffort: String? {
+        ModelCapabilities.validatedEffort(reasoningPreference.rawValue, model: currentModelName)
+    }
+
+    private struct RequestOptions {
+        let mode: BillingMode
+        let model: String
+        let language: String
+        let effort: String?
+        let attachImage: Bool
+        let additionalInstructions: String
+    }
+
+    private var requestOptions: RequestOptions {
+        .init(mode: billingMode, model: currentModelName, language: codeLanguage,
+              effort: selectedReasoningEffort, attachImage: attachImageToSelection,
+              additionalInstructions: additionalInstructions)
+    }
     private var started = false
 
-    init(startServices: Bool = true) {
+    init(startServices: Bool = true, openAIService: OpenAIService = OpenAIService(),
+         reasoningSettings: ReasoningSettings = ReasoningSettings(),
+         selectionReader: ((Bool) async throws -> String)? = nil,
+         imageCapturer: ((Bool) async throws -> Data)? = nil,
+         credentialProvider: ((BillingMode, String) async throws -> InferenceCredential)? = nil,
+         clipboardWriter: ((String) -> Bool)? = nil) {
+        self.openAIService = openAIService
+        self.reasoningSettings = reasoningSettings
+        self.selectionReader = selectionReader
+        self.imageCapturer = imageCapturer
+        self.credentialProvider = credentialProvider
+        self.clipboardWriter = clipboardWriter ?? { ResponseClipboard.copy($0) }
+        attachImageToSelection = UserDefaults.standard.bool(forKey: "attachImageToSelection")
+        additionalInstructions = UserDefaults.standard.string(forKey: "additionalInstructions") ?? ""
         captureShortcut = HotKeyConfiguration.load(prefix: "capture", fallback: .captureDefault)
         textShortcut = HotKeyConfiguration.load(prefix: "text", fallback: .textDefault)
         codeShortcut = HotKeyConfiguration.load(prefix: "code", fallback: .codeDefault)
@@ -130,121 +185,202 @@ final class AppModel: ObservableObject {
         registerHotKeys()
     }
 
+    @Published private(set) var selectedText = ""
+
     func captureAndAnalyze() async {
-        guard !isWorking, !connectionBusy else { return }
-        hasSelectionError = false
-        quickCopyMessage = nil
-        copied = false
-        copiedCodeID = nil
-        errorMessage = nil
-        explanation = ""
-        capturedImage = nil
-        selectedText = ""
-
-        do {
-            status = .selecting
-            let credential = try await inferenceCredential()
-            resultBillingLabel = billingLabel
-            let capture = try await captureService.captureInteractiveRegion()
-            capturedImage = NSImage(data: capture)
-            selectedText = ""
-            status = .analyzing
-            NotificationCenter.default.post(name: .studyLensOpenResult, object: nil)
-
-            explanation = try await openAIService.explain(
-                imageData: capture,
-                credential: credential,
-                model: currentModelName
-            )
-            status = .ready
-        } catch is CancellationError {
-            status = .idle
-        } catch let error as ScreenCaptureError where error == .cancelled {
-            status = .idle
-        } catch {
-            fail(error.localizedDescription)
-            NotificationCenter.default.post(name: .studyLensOpenResult, object: nil)
+        await runRequest(initialStage: .selectingImage, silent: false) { id, options in
+            let capture = try await self.captureImage(promptForPermission: true)
+            try self.checkRequest(id)
+            self.capturedImage = NSImage(data: capture)
+            self.requestProgress?.prepareConnection()
+            let credential = try await self.inferenceCredential(mode: options.mode, model: options.model)
+            try self.checkRequest(id)
+            self.beginInference(id: id, options: options, silent: false)
+            let response = try await self.openAIService.explain(
+                imageData: capture, credential: credential, model: options.model,
+                reasoningEffort: options.effort, onProgress: self.progressHandler(id: id))
+            try self.checkRequest(id)
+            self.explanation = response
         }
     }
 
-    @Published private(set) var selectedText = ""
-
-    func analyzeSelectedText() async {
-        guard !isWorking, !connectionBusy else { return }
-        hasSelectionError = false
-        quickCopyMessage = nil
-        copied = false
-        copiedCodeID = nil
-        errorMessage = nil
-        explanation = ""
-        capturedImage = nil
-        selectedText = ""
-
-        do {
-            // Read the selection before authentication or model discovery can change focus.
-            status = .selecting
-            let text = try await selectedTextService.readSelectedText()
-            selectedText = text
-            capturedImage = nil
-            status = .analyzing
-            let credential = try await inferenceCredential()
-            resultBillingLabel = billingLabel
-            NotificationCenter.default.post(name: .studyLensOpenResult, object: nil)
-            explanation = try await openAIService.explain(
-                selectedText: text,
-                credential: credential,
-                model: currentModelName
-            )
-            status = .ready
-        } catch {
-            hasSelectionError = error is SelectedTextError
-            fail(error.localizedDescription)
-            NotificationCenter.default.post(name: .studyLensOpenResult, object: nil)
+    func analyzeSelectedText(attachImage: Bool? = nil) async {
+        await runRequest(initialStage: .readingSelection, silent: false, attachImage: attachImage) { id, options in
+            let text = try await self.readSelection(promptForPermission: true)
+            try self.checkRequest(id)
+            self.selectedText = text
+            try InputAttachment.validate(text: text, additionalInstructions: options.additionalInstructions)
+            self.requestProgress?.finishSelection()
+            // Keep the source selection before authentication, capture, or UI activation changes focus.
+            let image = try await self.optionalImage(id: id, options: options, silent: false)
+            self.requestProgress?.prepareConnection()
+            let credential = try await self.inferenceCredential(mode: options.mode, model: options.model)
+            try self.checkRequest(id)
+            self.beginInference(id: id, options: options, silent: false)
+            let response = try await self.openAIService.explain(
+                selectedText: text, credential: credential, model: options.model,
+                reasoningEffort: options.effort, onProgress: self.progressHandler(id: id),
+                imageData: image, additionalInstructions: options.additionalInstructions)
+            try self.checkRequest(id)
+            self.explanation = response
         }
     }
 
     func copyExplanation() {
         guard (status == .ready || status == .failed), !explanation.isEmpty else { return }
-        copied = ResponseClipboard.copy(explanation)
+        copied = clipboardWriter(explanation)
         copiedCodeID = nil
     }
 
-    func copySelectedCode(using injectedWorkflow: QuickCodeCopy? = nil) async {
+    func copySelectedCode(using injectedWorkflow: QuickCodeCopy? = nil, attachImage: Bool? = nil) async {
+        await runRequest(initialStage: .readingSelection, silent: true, attachImage: attachImage) { id, options in
+            let workflow = injectedWorkflow ?? QuickCodeCopy(
+                readSelection: { try await self.readSelection(promptForPermission: false) },
+                generate: { text in
+                    try InputAttachment.validate(text: text, additionalInstructions: options.additionalInstructions)
+                    let image = try await self.optionalImage(id: id, options: options, silent: true)
+                    self.requestProgress?.prepareConnection()
+                    let credential = try await self.inferenceCredential(mode: options.mode, model: options.model)
+                    try self.checkRequest(id)
+                    self.beginInference(id: id, options: options, silent: true)
+                    return try await self.openAIService.generateCode(
+                        selectedText: text, language: options.language, credential: credential, model: options.model,
+                        reasoningEffort: options.effort, onProgress: self.progressHandler(id: id),
+                        imageData: image, additionalInstructions: options.additionalInstructions)
+                }, write: self.clipboardWriter
+            )
+            let codeID = try await workflow.run(onSelection: { text in
+                guard self.activeRequestID == id else { return }
+                self.selectedText = text
+                self.requestProgress?.finishSelection()
+                self.status = .analyzing
+                self.quickCopyMessage = "코드 작성 중… 완료되면 클립보드에 복사합니다."
+            }, onResponse: { response in
+                guard self.activeRequestID == id else { return }
+                self.explanation = response
+                self.requestProgress?.stage = .copying
+            }, canCommit: { self.activeRequestID == id })
+            try self.checkRequest(id)
+            self.copiedCodeID = codeID
+            self.quickCopyMessage = "코드 복사 완료 · ⌘V로 붙여넣기"
+        }
+    }
+
+    func cancelCurrentRequest() {
+        guard activeRequestID != nil else { return }
+        activeRequestID = nil // Fence late completions before allowing another request.
+        progressRequestID = nil
+        activeRequestTask?.cancel()
+        activeRequestTask = nil
+        requestProgress?.finish(.cancelled)
+        status = .idle
+        explanation = ""
+        copiedCodeID = nil
+        errorMessage = nil
+        quickCopyMessage = "요청을 취소했습니다 · 기존 클립보드는 유지했습니다."
+    }
+
+    private func runRequest(initialStage: RequestProgress.Stage, silent: Bool, attachImage: Bool? = nil,
+                            operation: @escaping (UUID, RequestOptions) async throws -> Void) async {
         guard !isWorking, !connectionBusy else { return }
         reset()
-        quickCopyMessage = "선택한 텍스트 읽는 중…"
+        let snapshot = requestOptions
+        let options = RequestOptions(mode: snapshot.mode, model: snapshot.model, language: snapshot.language,
+                                     effort: snapshot.effort, attachImage: attachImage ?? snapshot.attachImage,
+                                     additionalInstructions: snapshot.additionalInstructions)
+        let id = UUID()
+        activeRequestID = id
+        progressRequestID = id
+        requestProgress = .init(stage: initialStage, model: options.model, billingMode: options.mode, effort: options.effort)
         status = .selecting
-        NotificationCenter.default.post(name: .studyLensHideResult, object: nil)
-        let language = codeLanguage
-        let workflow = injectedWorkflow ?? QuickCodeCopy(
-            readSelection: { [selectedTextService] in try await selectedTextService.readSelectedText(promptForPermission: false) },
-            generate: { [self] text in
-                let credential = try await inferenceCredential()
-                resultBillingLabel = billingLabel
-                return try await openAIService.generateCode(selectedText: text, language: language, credential: credential, model: currentModelName)
-            }
-        )
-        do {
-            copiedCodeID = try await workflow.run(onSelection: { [self] text in
-                selectedText = text
-                quickCopyMessage = "코드 작성 중… 완료되면 클립보드에 복사합니다."
-                status = .analyzing
-            }, onResponse: { [self] response in explanation = response })
-            quickCopyMessage = "코드 복사 완료 · ⌘V로 붙여넣기"
-            status = .ready
-        } catch {
-            hasSelectionError = error is SelectedTextError
-            quickCopyMessage = "복사하지 못했습니다 · 메뉴에서 오류 확인"
-            fail(error.localizedDescription)
+        if silent {
+            quickCopyMessage = "선택한 텍스트 읽는 중…"
+            NotificationCenter.default.post(name: .studyLensHideResult, object: nil)
         }
-        // This workflow deliberately never posts studyLensOpenResult, even on failure.
+        let task = Task { @MainActor [self] in
+            defer {
+                if activeRequestID == id { activeRequestID = nil; activeRequestTask = nil }
+            }
+            do {
+                try await operation(id, options)
+                try checkRequest(id)
+                requestProgress?.record(.completed)
+                requestProgress?.finish(.completed)
+                status = .ready
+            } catch {
+                guard activeRequestID == id else { return }
+                if error is CancellationError || (error as? URLError)?.code == .cancelled ||
+                    (error as? ScreenCaptureError) == .cancelled {
+                    cancelCurrentRequest()
+                    return
+                }
+                requestProgress?.finish(.failed)
+                hasSelectionError = error is SelectedTextError
+                hasInputError = hasSelectionError || error is ScreenCaptureError || error is InputValidationError
+                if (error as? URLError)?.code == .timedOut {
+                    fail("요청 시간이 초과되었습니다. 메뉴에서 직접 다시 요청해 주세요.")
+                } else { fail(error.localizedDescription) }
+                if silent { quickCopyMessage = "복사하지 못했습니다 · 메뉴에서 오류 확인" }
+                else { NotificationCenter.default.post(name: .studyLensOpenResult, object: nil) }
+            }
+        }
+        activeRequestTask = task
+        await withTaskCancellationHandler {
+            await task.value
+        } onCancel: { task.cancel() }
+    }
+
+    private func checkRequest(_ id: UUID) throws {
+        try Task.checkCancellation()
+        guard activeRequestID == id else { throw CancellationError() }
+    }
+
+    private func beginInference(id: UUID, options: RequestOptions, silent: Bool) {
+        guard activeRequestID == id else { return }
+        resultBillingLabel = options.mode.title
+        status = .analyzing
+        requestProgress?.waitForResponse()
+        if !silent { NotificationCenter.default.post(name: .studyLensOpenResult, object: nil) }
+    }
+
+    private func progressHandler(id: UUID) -> @Sendable (InferenceProgressEvent) -> Void {
+        { [weak self] event in
+            let time = ProcessInfo.processInfo.systemUptime
+            Task { @MainActor [weak self] in
+                guard let self, self.progressRequestID == id else { return }
+                self.requestProgress?.record(event, now: time)
+            }
+        }
+    }
+
+    private func readSelection(promptForPermission: Bool) async throws -> String {
+        if let selectionReader { return try await selectionReader(promptForPermission) }
+        return try await selectedTextService.readSelectedText(promptForPermission: promptForPermission)
+    }
+
+    private func captureImage(promptForPermission: Bool) async throws -> Data {
+        if let imageCapturer { return try await imageCapturer(promptForPermission) }
+        return try await captureService.captureInteractiveRegion(promptForPermission: promptForPermission)
+    }
+
+    private func optionalImage(id: UUID, options: RequestOptions, silent: Bool) async throws -> Data? {
+        guard options.attachImage else { return nil }
+        try checkRequest(id)
+        guard ModelCapabilities.imageInput.contains(options.model) else { throw InputValidationError.unsupportedImageModel }
+        requestProgress?.stage = .selectingImage
+        if silent { quickCopyMessage = "첨부할 그림 영역을 직접 선택하세요 · Esc로 취소" }
+        let image = try await captureImage(promptForPermission: !silent)
+        try checkRequest(id)
+        try InputAttachment.validate(image: image, model: options.model)
+        capturedImage = NSImage(data: image)
+        return image
     }
 
     func copyCode(_ id: Int) {
-        guard status == .ready || status == .failed,
+        guard !isWorking, status == .ready || status == .failed,
               let block = responseDocument.blocks.first(where: { $0.id == id && $0.isCode && $0.isComplete }),
               !block.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        copiedCodeID = ResponseClipboard.copy(block.text) ? id : nil
+        copiedCodeID = clipboardWriter(block.text) ? id : nil
         copied = false
     }
 
@@ -256,8 +392,12 @@ final class AppModel: ObservableObject {
     }
 
     func reset() {
+        cancelCurrentRequest()
+        requestProgress = nil
+        progressRequestID = nil
         status = .idle
         hasSelectionError = false
+        hasInputError = false
         explanation = ""
         capturedImage = nil
         selectedText = ""
@@ -290,20 +430,24 @@ final class AppModel: ObservableObject {
         shortcutError = errors.isEmpty ? nil : errors.joined(separator: "\n")
     }
 
-    private var currentModelName: String {
+    var currentModelName: String {
         (billingMode == .chatGPT ? chatGPTModelName : modelName).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func inferenceCredential() async throws -> InferenceCredential {
-        if billingMode == .apiKey {
+    private func inferenceCredential(mode: BillingMode, model: String) async throws -> InferenceCredential {
+        try Task.checkCancellation()
+        if let credentialProvider { return try await credentialProvider(mode, model) }
+        if mode == .apiKey {
             let key = try KeychainService.loadAPIKey()
             guard !key.isEmpty else { throw ChatGPTAuthError.oauth("API 키가 저장되지 않았습니다") }
             return .init(token: key, mode: .apiKey)
         }
         let token = try await chatGPTAuth.accessToken()
+        try Task.checkCancellation()
         syncChatGPTProfiles()
         if chatGPTModels.isEmpty { try await loadChatGPTModels(token: token) }
-        guard chatGPTModels.contains(where: { $0.slug == chatGPTModelName }) else {
+        try Task.checkCancellation()
+        guard chatGPTModels.contains(where: { $0.slug == model }) else {
             throw OpenAIServiceError.invalidModel
         }
         return .init(token: token, mode: .chatGPT)
@@ -357,7 +501,9 @@ final class AppModel: ObservableObject {
     }
 
     private func loadChatGPTModels(token: String) async throws {
-        chatGPTModels = try await openAIService.listChatGPTModels(accessToken: token)
+        let models = try await openAIService.listChatGPTModels(accessToken: token)
+        try Task.checkCancellation()
+        chatGPTModels = models
         guard !chatGPTModels.isEmpty else { throw OpenAIServiceError.invalidModel }
         if !chatGPTModels.contains(where: { $0.slug == chatGPTModelName }) {
             chatGPTModelName = chatGPTModels[0].slug
