@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import XCTest
 @testable import StudyLens
@@ -73,6 +74,41 @@ final class ClaudeCodeServiceTests: XCTestCase {
 
         let result = try await ClaudeCodeService(executablePath: script.path).explain(selectedText: "선택한 문제")
         XCTAssertEqual(result, "받음")
+    }
+
+    @MainActor
+    func testAppModelKeepsClaudeProviderAndAdditionalInstructionsWithoutOpenAICredentials() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let script = directory.appendingPathComponent("fake-provider")
+        try #"""
+        #!/bin/sh
+        input=$(cat)
+        case "$input" in
+          *'선택한 문제'*'추가 지시:'*'주석 포함'*) printf '%s\n' '{"type":"result","is_error":false,"result":"```python\nprint(1)\n```"}' ;;
+          *) echo '{"type":"result","is_error":true,"result":"입력 없음"}' ;;
+        esac
+        """#.write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        let pasteboard = NSPasteboard(name: .init("StudyLens.Provider.\(UUID())"))
+        defer { pasteboard.releaseGlobally() }
+        let model = AppModel(startServices: false, selectionReader: { _ in "선택한 문제" },
+                             imageCapturer: { _ in XCTFail("Claude text request captured an optional image"); return Data() },
+                             credentialProvider: { _, _ in XCTFail("Claude requested OpenAI credentials"); throw CancellationError() },
+                             clipboardWriter: { ResponseClipboard.copy($0, to: pasteboard) })
+        model.billingMode = .claudeCode
+        model.claudeModelName = "sonnet"
+        model.claudeExecutablePath = script.path
+        model.attachImageToSelection = true
+        model.additionalInstructions = "주석 포함"
+        await model.copySelectedCode()
+        XCTAssertEqual(model.status, .ready, model.errorMessage ?? "")
+        XCTAssertEqual(pasteboard.string(forType: .string), "print(1)\n")
+        XCTAssertEqual(model.resultBillingLabel, BillingMode.claudeCode.title)
+        XCTAssertEqual(model.requestProgress?.model, "sonnet")
+        XCTAssertNil(model.requestProgress?.firstEvent)
+        XCTAssertNotNil(model.requestProgress?.firstText)
     }
 
     func testNVMCandidatesPreferNewestNodeVersion() throws {

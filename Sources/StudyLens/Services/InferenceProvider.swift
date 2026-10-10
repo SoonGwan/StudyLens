@@ -13,17 +13,26 @@ struct OpenAIProvider: InferenceProvider {
     let service: OpenAIService
     let credential: InferenceCredential
     let model: String
+    var reasoningEffort: String? = nil
+    var onProgress: (@Sendable (InferenceProgressEvent) -> Void)? = nil
+    var imageData: Data? = nil
+    var additionalInstructions = ""
 
     func explain(imageData: Data) async throws -> String {
-        try await service.explain(imageData: imageData, credential: credential, model: model)
+        try await service.explain(imageData: imageData, credential: credential, model: model,
+                                  reasoningEffort: reasoningEffort, onProgress: onProgress)
     }
 
     func explain(selectedText: String) async throws -> String {
-        try await service.explain(selectedText: selectedText, credential: credential, model: model)
+        try await service.explain(selectedText: selectedText, credential: credential, model: model,
+                                  reasoningEffort: reasoningEffort, onProgress: onProgress,
+                                  imageData: imageData, additionalInstructions: additionalInstructions)
     }
 
     func generateCode(selectedText: String, language: String) async throws -> String {
-        try await service.generateCode(selectedText: selectedText, language: language, credential: credential, model: model)
+        try await service.generateCode(selectedText: selectedText, language: language, credential: credential, model: model,
+                                       reasoningEffort: reasoningEffort, onProgress: onProgress,
+                                       imageData: imageData, additionalInstructions: additionalInstructions)
     }
 }
 

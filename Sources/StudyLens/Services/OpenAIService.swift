@@ -32,41 +32,47 @@ struct OpenAIService {
         self.session = session ?? URLSession(configuration: .ephemeral, delegate: RejectRedirects(), delegateQueue: nil)
     }
 
-    func explain(imageData: Data, credential: InferenceCredential, model: String) async throws -> String {
+    func explain(imageData: Data, credential: InferenceCredential, model: String,
+                 reasoningEffort: String? = nil,
+                 onProgress: (@Sendable (InferenceProgressEvent) -> Void)? = nil) async throws -> String {
         guard !model.isEmpty else { throw OpenAIServiceError.invalidModel }
-
-        let imageURL = "data:image/png;base64,\(imageData.base64EncodedString())"
-        let payload = ResponseRequest(
-            model: model,
-            instructions: StudyPrompt.instructions,
-            input: [
-                .init(role: "user", content: [
-                    .text(StudyPrompt.imageRequest),
-                    .image(imageURL)
-                ])
-            ],
-            maxOutputTokens: credential.mode == .apiKey ? 2200 : nil,
-            store: false,
-            stream: credential.mode == .chatGPT
-        )
-        return try await perform(payload: payload, credential: credential)
+        try InputAttachment.validate(image: imageData, model: model)
+        let payload = makeRequest(model: model, instructions: StudyPrompt.instructions, content: [
+            .text(StudyPrompt.imageRequest),
+            .image("data:image/png;base64,\(imageData.base64EncodedString())")
+        ], limit: credential.mode == .apiKey ? 2200 : nil, effort: reasoningEffort)
+        return try await perform(payload: payload, credential: credential, onProgress: onProgress)
     }
 
-    func explain(selectedText: String, credential: InferenceCredential, model: String) async throws -> String {
+    func explain(selectedText: String, credential: InferenceCredential, model: String,
+                 reasoningEffort: String? = nil,
+                 onProgress: (@Sendable (InferenceProgressEvent) -> Void)? = nil,
+                 imageData: Data? = nil, additionalInstructions: String = "") async throws -> String {
         guard !model.isEmpty else { throw OpenAIServiceError.invalidModel }
-        let payload = ResponseRequest(
-            model: model,
-            instructions: StudyPrompt.instructions,
-            input: [
-                .init(role: "user", content: [
-                    .text(selectedText)
-                ])
-            ],
-            maxOutputTokens: credential.mode == .apiKey ? 2200 : nil,
-            store: false,
-            stream: credential.mode == .chatGPT
-        )
-        return try await perform(payload: payload, credential: credential)
+        let content = try Self.inputContent(text: selectedText, instructions: additionalInstructions, image: imageData, model: model)
+        let payload = makeRequest(model: model, instructions: StudyPrompt.instructions, content: content,
+                                  limit: credential.mode == .apiKey ? 2200 : nil, effort: reasoningEffort)
+        return try await perform(payload: payload, credential: credential, onProgress: onProgress)
+    }
+
+    private func makeRequest(model: String, instructions: String, content: [InputContent], limit: Int?, effort: String?) -> ResponseRequest {
+        ResponseRequest(model: model, instructions: instructions,
+                        input: [.init(role: "user", content: content)], maxOutputTokens: limit,
+                        store: false, stream: true,
+                        reasoning: ModelCapabilities.validatedEffort(effort, model: model).map { .init(effort: $0) })
+    }
+
+    private static func inputContent(text: String, instructions: String, image: Data?, model: String) throws -> [InputContent] {
+        try InputAttachment.validate(text: text, additionalInstructions: instructions)
+        var content: [InputContent] = [.text(text)]
+        if !instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            content.append(.text("추가 지시:\n" + instructions))
+        }
+        if let image {
+            try InputAttachment.validate(image: image, model: model)
+            content.append(.image("data:image/png;base64,\(image.base64EncodedString())"))
+        }
+        return content
     }
 
     func listChatGPTModels(accessToken: String) async throws -> [ChatGPTModel] {
@@ -80,67 +86,80 @@ struct OpenAIService {
         return catalogue.models.filter { $0.visibility == "list" }
     }
 
-    func generateCode(selectedText: String, language: String, credential: InferenceCredential, model: String) async throws -> String {
+    func generateCode(selectedText: String, language: String, credential: InferenceCredential, model: String,
+                      reasoningEffort: String? = nil,
+                      onProgress: (@Sendable (InferenceProgressEvent) -> Void)? = nil,
+                      imageData: Data? = nil, additionalInstructions: String = "") async throws -> String {
         guard !model.isEmpty else { throw OpenAIServiceError.invalidModel }
-        let payload = ResponseRequest(
-            model: model,
-            instructions: StudyPrompt.codeInstructions(language: language),
-            input: [.init(role: "user", content: [.text(selectedText)])],
-            maxOutputTokens: credential.mode == .apiKey ? 12000 : nil,
-            store: false,
-            stream: credential.mode == .chatGPT
-        )
-        return try await perform(payload: payload, credential: credential)
+        let content = try Self.inputContent(text: selectedText, instructions: additionalInstructions, image: imageData, model: model)
+        let payload = makeRequest(model: model, instructions: StudyPrompt.codeInstructions(language: language), content: content,
+                                  limit: credential.mode == .apiKey ? 12000 : nil, effort: reasoningEffort)
+        return try await perform(payload: payload, credential: credential, onProgress: onProgress)
     }
 
-    private func perform(payload: ResponseRequest, credential: InferenceCredential) async throws -> String {
+    private func perform(payload: ResponseRequest, credential: InferenceCredential,
+                         onProgress: (@Sendable (InferenceProgressEvent) -> Void)?) async throws -> String {
+        try Task.checkCancellation()
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(credential.token)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONEncoder().encode(payload)
-
-        if payload.stream {
-            request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-            let (bytes, response) = try await session.bytes(for: request)
-            guard let http = response as? HTTPURLResponse else { throw OpenAIServiceError.invalidResponse }
-            guard (200..<300).contains(http.statusCode) else {
-                var data = Data()
-                for try await byte in bytes {
-                    if data.count >= 65_536 { break }
-                    data.append(byte)
-                }
-                throw Self.apiError(data: data, status: http.statusCode)
-            }
-            var stream = ResponseStreamAccumulator()
-            var frames = SSEEventFramer()
-            for try await byte in bytes {
-                if let event = try frames.append(byte), let completed = try stream.consume(event) { return completed }
-            }
-            if let event = try frames.finish(), let completed = try stream.consume(event) { return completed }
-            throw OpenAIServiceError.interruptedStream
-        }
-
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw OpenAIServiceError.invalidResponse
-        }
+        let (bytes, response) = try await session.bytes(for: request)
+        try Task.checkCancellation()
+        guard let http = response as? HTTPURLResponse else { throw OpenAIServiceError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
+            var data = Data()
+            for try await byte in bytes {
+                try Task.checkCancellation()
+                if data.count >= 65_536 { break }
+                data.append(byte)
+            }
             throw Self.apiError(data: data, status: http.statusCode)
         }
-
+        if http.value(forHTTPHeaderField: "Content-Type")?.lowercased().contains("text/event-stream") == true {
+            var accumulator = ResponseStreamAccumulator()
+            var frames = SSEEventFramer()
+            var progress = ResponseProgressReporter()
+            for try await byte in bytes {
+                try Task.checkCancellation()
+                if let event = try frames.append(byte) {
+                    progress.observe(event, completedText: nil, notify: onProgress)
+                    let completed = try accumulator.consume(event)
+                    progress.observe(event, completedText: completed, notify: onProgress)
+                    if let completed {
+                        try Task.checkCancellation()
+                        return completed
+                    }
+                }
+            }
+            if let event = try frames.finish() {
+                progress.observe(event, completedText: nil, notify: onProgress)
+                let completed = try accumulator.consume(event)
+                progress.observe(event, completedText: completed, notify: onProgress)
+                if let completed { try Task.checkCancellation(); return completed }
+            }
+            throw OpenAIServiceError.interruptedStream
+        }
+        // Some compatible transports return a complete JSON response despite stream=true.
+        // This path reports no SSE event and first text only when the body is available.
+        var data = Data()
+        for try await byte in bytes {
+            try Task.checkCancellation()
+            guard data.count < 20 * 1024 * 1024 else { throw OpenAIServiceError.invalidResponse }
+            data.append(byte)
+        }
         let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
-        if let status = decoded.status, status != "completed" { throw OpenAIServiceError.interruptedStream }
-        let text = decoded.output
-            .filter { $0.type == "message" }
-            .flatMap(\.content)
-            .filter { $0.type == "output_text" }
-            .compactMap(\.text)
-            .joined(separator: "\n")
+        guard decoded.status == "completed" else { throw OpenAIServiceError.interruptedStream }
+        let text = decoded.output.filter { $0.type == "message" }.flatMap(\.content)
+            .filter { $0.type == "output_text" }.compactMap(\.text).joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-
         guard !text.isEmpty else { throw OpenAIServiceError.emptyOutput }
+        try Task.checkCancellation()
+        onProgress?(.firstText)
+        onProgress?(.completed)
         return text
     }
 
@@ -233,9 +252,11 @@ struct ResponseRequest: Encodable {
     let maxOutputTokens: Int?
     let store: Bool
     let stream: Bool
+    var reasoning: Reasoning? = nil
+    struct Reasoning: Encodable { let effort: String }
 
     enum CodingKeys: String, CodingKey {
-        case model, instructions, input, store, stream
+        case model, instructions, input, store, stream, reasoning
         case maxOutputTokens = "max_output_tokens"
     }
 }
@@ -326,5 +347,24 @@ struct ResponseStreamAccumulator {
         default: break
         }
         return nil
+    }
+}
+
+
+enum InferenceProgressEvent: Equatable, Sendable { case firstEvent, firstText, completed }
+
+struct ResponseProgressReporter {
+    private var sawEvent = false
+    private var sawText = false
+
+    mutating func observe(_ data: String, completedText: String?, notify: (@Sendable (InferenceProgressEvent) -> Void)?) {
+        guard data != "[DONE]", let bytes = data.data(using: .utf8),
+              let event = (try? JSONSerialization.jsonObject(with: bytes)) as? [String: Any],
+              let type = event["type"] as? String else { return }
+        if !sawEvent { sawEvent = true; notify?(.firstEvent) }
+        let textDelta = ["response.output_text.delta", "response.refusal.delta"].contains(type)
+            && !(event["delta"] as? String ?? "").isEmpty
+        if !sawText, textDelta || !(completedText ?? "").isEmpty { sawText = true; notify?(.firstText) }
+        if completedText != nil { notify?(.completed) }
     }
 }

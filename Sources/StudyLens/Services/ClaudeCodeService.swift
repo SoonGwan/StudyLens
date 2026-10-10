@@ -45,17 +45,27 @@ struct ClaudeCodeService: InferenceProvider {
     /// Empty values mean "find claude automatically" and "use Claude Code's default model".
     var executablePath = ""
     var model = ""
+    var additionalInstructions = ""
 
     func explain(imageData: Data) async throws -> String {
         try await perform(content: [Self.imageBlock(imageData), Self.textBlock(StudyPrompt.imageRequest)], systemPrompt: StudyPrompt.instructions)
     }
 
     func explain(selectedText: String) async throws -> String {
-        try await perform(content: [Self.textBlock(selectedText)], systemPrompt: StudyPrompt.instructions)
+        try await perform(content: try selectedContent(selectedText), systemPrompt: StudyPrompt.instructions)
     }
 
     func generateCode(selectedText: String, language: String) async throws -> String {
-        try await perform(content: [Self.textBlock(selectedText)], systemPrompt: StudyPrompt.codeInstructions(language: language))
+        try await perform(content: try selectedContent(selectedText), systemPrompt: StudyPrompt.codeInstructions(language: language))
+    }
+
+    private func selectedContent(_ text: String) throws -> [[String: Any]] {
+        try InputAttachment.validate(text: text, additionalInstructions: additionalInstructions)
+        var content = [Self.textBlock(text)]
+        if !additionalInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            content.append(Self.textBlock("추가 지시:\n" + additionalInstructions))
+        }
+        return content
     }
 
     /// Fails fast before a capture starts. The first lookup may ask the login shell, so keep it off the main actor.
