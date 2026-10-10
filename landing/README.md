@@ -34,8 +34,8 @@ HTML/CSS/JS와 선택한 웹 자산, robots, sitemap, release manifest만 들어
 ## 브라우저 검증
 
 ```sh
-npm ci --prefix tools/landing
-node scripts/check_landing.cjs http://127.0.0.1:4182/
+bun install --cwd tools/landing
+bun scripts/check_landing.cjs http://127.0.0.1:4182/
 ```
 
 설치된 Chrome을 사용합니다. 360px·태블릿·데스크톱의 가로 넘침, 이미지 로딩,

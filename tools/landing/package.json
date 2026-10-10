@@ -2,8 +2,8 @@
   "name": "studylens-landing-checks",
   "private": true,
   "scripts": {
-    "check": "node ../../scripts/check_landing.cjs",
-    "assets": "node ../../scripts/render_landing_assets.cjs"
+    "check": "bun ../../scripts/check_landing.cjs",
+    "assets": "bun ../../scripts/render_landing_assets.cjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.11.1",

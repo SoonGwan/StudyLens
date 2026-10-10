@@ -31,7 +31,7 @@ SwiftUI 앱을 [Tauri 2](https://v2.tauri.app/)(Rust + React)로 다시 만들�
   - 로그인된 Claude Code (Claude Pro·Max 구독)
   - 구독 연동을 지원하는 ChatGPT Plus·Pro 계정
   - OpenAI API 키
-- 소스 빌드: Node.js 20 이상, Rust (rustup), macOS는 Xcode Command Line Tools, Windows는 [Tauri 사전 요구 사항](https://v2.tauri.app/start/prerequisites/)
+- 소스 빌드: [Bun](https://bun.sh) 1.1 이상, Rust (rustup), macOS는 Xcode Command Line Tools, Windows는 [Tauri 사전 요구 사항](https://v2.tauri.app/start/prerequisites/)
 
 ## 설치
 
@@ -40,8 +40,8 @@ SwiftUI 앱을 [Tauri 2](https://v2.tauri.app/)(Rust + React)로 다시 만들�
 ```bash
 git clone https://github.com/SoonGwan/StudyLens.git
 cd StudyLens
-npm ci
-npm run app:build
+bun install
+bun run app:build
 open src-tauri/target/release/bundle/dmg
 ```
 
@@ -128,13 +128,13 @@ Anthropic은 서드파티 앱용 구독 로그인(OAuth)을 제공하지 않습�
 ## 개발
 
 ```bash
-npm ci
-npm run app:dev     # Swift 도우미를 빌드하고 개발 모드로 실행
-npm test            # 프론트엔드(vitest) + Rust + Swift 도우미 테스트
-npm run typecheck
+bun install
+bun run app:dev     # Swift 도우미를 빌드하고 개발 모드로 실행
+bun run test        # 프론트엔드(vitest) + Rust + Swift 도우미 테스트
+bun run typecheck
 ```
 
-`app:dev`로 실행하면 macOS가 StudyLens 대신 실행한 터미널 앱에 권한을 요구할 수 있습니다. 권한까지 확인하려면 `npm run app:build`로 만든 앱을 쓰세요.
+`app:dev`로 실행하면 macOS가 StudyLens 대신 실행한 터미널 앱에 권한을 요구할 수 있습니다. 권한까지 확인하려면 `bun run app:build`로 만든 앱을 쓰세요.
 
 ## 주요 구조
 

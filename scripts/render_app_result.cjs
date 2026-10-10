@@ -1,4 +1,4 @@
-// Renders the app's real result window (React, built by `npm run build`) with a saved
+// Renders the app's real result window (React, built by `bun run build`) with a saved
 // example answer. Tauri IPC is stubbed in the page; no AI request, no screen access.
 const { chromium } = require('../tools/landing/node_modules/playwright-core');
 const { createServer } = require('node:http');
@@ -7,7 +7,7 @@ const { join, resolve, extname, normalize } = require('node:path');
 
 const root = resolve(__dirname, '..');
 const dist = join(root, 'dist');
-if (!existsSync(join(dist, 'result.html'))) throw new Error('Run `npm run build` first.');
+if (!existsSync(join(dist, 'result.html'))) throw new Error('Run `bun run build` first.');
 const example = readFileSync(join(root, 'brand/result-example.txt'), 'utf8');
 
 // Same fence split as src-tauri/src/document.rs for this well-formed example.

@@ -36,7 +36,7 @@ live in `landing/style.css`.
 - `landing/assets/lens-poses.webp`: delivery encoding of the complete sheet.
   CSS shows individual grid cells without repainting the artwork. Preserve alpha.
 - `app-result.png`: rendered from the app's real result window (`src/result/`,
-  built with `npm run build`) using [result-example.txt](result-example.txt). This is
+  built with `bun run build`) using [result-example.txt](result-example.txt). This is
   an authored, fixed teaching example, not a live model response or a screen
   recording. The renderer stubs the app's IPC in headless Chrome; it does not access
   a user's screen or send a request.
@@ -49,12 +49,12 @@ live in `landing/style.css`.
 Regenerate locally on macOS:
 
 ```sh
-npm ci --prefix tools/landing
-npm ci && npm run build
-node scripts/render_app_result.cjs
-node scripts/render_landing_assets.cjs
+bun install --cwd tools/landing
+bun install && bun run build
+bun scripts/render_app_result.cjs
+bun scripts/render_landing_assets.cjs
 ```
 
-The renderers need Node and an installed Chrome. For a different Chrome path,
-set `STUDYLENS_CHROME_PATH`. Ordinary static builds need only Python, with no Node,
+The renderers need Bun and an installed Chrome. For a different Chrome path,
+set `STUDYLENS_CHROME_PATH`. Ordinary static builds need only Python, with no Bun,
 image service, font CDN, or runtime package dependency.

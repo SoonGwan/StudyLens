@@ -96,11 +96,11 @@
 
     <section class="wrap section install-section" id="install" aria-labelledby="install-title">
       <div class="section-label"><span>03 / 시작하기</span><span>지금은 소스에서 설치합니다.</span></div>
-      <div class="section-heading"><h2 id="install-title">메뉴바에<br>작은 동료 하나.</h2><p>macOS 13 이상, Node.js 20 이상, Rust,<br>Xcode Command Line Tools가 필요합니다.<br>현재 공개 바이너리 릴리스는 없습니다.</p></div>
+      <div class="section-heading"><h2 id="install-title">메뉴바에<br>작은 동료 하나.</h2><p>macOS 13 이상, Bun, Rust,<br>Xcode Command Line Tools가 필요합니다.<br>현재 공개 바이너리 릴리스는 없습니다.</p></div>
       <div class="install-layout"><div><div class="platform-row"><strong>macOS</strong><span>소스 빌드 __APP_VERSION__ <span aria-hidden="true">↗</span></span></div><div class="platform-row pending"><strong>Windows</strong><span>실기기 검증 전</span></div><p class="install-note">앱은 Tauri로 macOS와 Windows를 함께 지원하도록 만들어졌습니다. Windows는 컴파일만 확인했고 실기기 검증·배포는 아직 완료되지 않았습니다.</p><a class="text-link" href="https://github.com/SoonGwan/StudyLens#설치">자세한 설치 문서 <span aria-hidden="true">↗</span></a></div><div class="install-terminal"><div class="terminal-head"><span>TERMINAL</span><button id="copy-install" type="button">명령 복사</button></div><pre tabindex="0" aria-label="소스 설치 명령"><code id="install-command">git clone https://github.com/SoonGwan/StudyLens.git
 cd StudyLens
-npm ci
-npm run app:build
+bun install
+bun run app:build
 open src-tauri/target/release/bundle/dmg</code></pre><p>.dmg를 열고 StudyLens를 응용 프로그램 폴더로 옮기세요.</p><span id="install-copy-status" role="status" aria-live="polite"></span></div></div>
       <ol class="setup-steps"><li><span>01</span><h3>앱 실행</h3><p>처음 실행 시 개발자 확인 경고가 뜨면 Control-클릭 → 열기를 선택하세요.</p></li><li><span>02</span><h3>연결 선택</h3><p>처음 실행하면 설정 창이 열립니다. Claude Code, ChatGPT, API 키 중 선택하세요. 이후에는 메뉴바의 점 아이콘에서 엽니다.</p></li><li><span>03</span><h3>권한 허용</h3><p>텍스트는 손쉬운 사용, 캡처는 화면 기록 권한이 필요합니다. 변경 후 앱을 다시 실행하세요.</p></li></ol>
     </section>
