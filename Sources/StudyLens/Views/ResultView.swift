@@ -78,6 +78,8 @@ struct ResultView: View {
                     .foregroundStyle(.secondary)
             } else if model.billingMode == .chatGPT && model.explanation.isEmpty {
                 Link("ChatGPT 사용량 관리", destination: URL(string: "https://chatgpt.com/settings/usage")!)
+            } else if model.billingMode == .claudeCode && model.explanation.isEmpty {
+                Link("Claude 사용량 확인", destination: URL(string: "https://claude.ai/settings/usage")!)
             }
             if !model.explanation.isEmpty {
                 Text("AI가 반환한 응답").font(.headline)

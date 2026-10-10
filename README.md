@@ -14,7 +14,7 @@ StudyLens는 macOS 메뉴바에서 실행되는 개인 학습 보조 MVP입니�
 
 - macOS 13 이상
 - Xcode 15 이상 또는 해당 Command Line Tools
-- 구독 연동을 지원하는 ChatGPT Plus·Pro 계정, 또는 OpenAI API 키
+- 구독 연동을 지원하는 ChatGPT Plus·Pro 계정, 로그인된 Claude Code(Claude Pro·Max 구독), 또는 OpenAI API 키
 
 ## ChatGPT 구독 사용량으로 사용하기
 
@@ -33,6 +33,19 @@ StudyLens 0.2는 공식 **Sign in with ChatGPT**를 사용합니다. API 키 없
 구독용 요청은 공식 `https://api.openai.com/v1/responses`로 보내며 `store: false`, `stream: true`를 적용합니다. 응답 완료 이벤트를 받은 경우에만 결과와 복사 버튼을 활성화합니다.
 
 공식 근거: [연동 개요](https://developers.openai.com/siwc/token-sharing-open-source), [로그인](https://developers.openai.com/siwc/token-sharing-open-source/sign-in), [모델과 추론](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference), [현재 제약](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations).
+
+## Claude 구독 사용량으로 사용하기 (Claude Code)
+
+Anthropic은 서드파티 앱용 구독 로그인(OAuth)을 제공하지 않습니다. 그래서 StudyLens는 Claude 토큰을 직접 다루지 않고, 이 Mac에 설치되어 로그인된 **Claude Code**(`claude` CLI)를 헤드리스 모드(`claude -p`)로 실행해 요청합니다. 요청은 Claude Code와 같은 구독 사용 한도를 공유합니다.
+
+1. [Claude Code](https://code.claude.com)를 설치합니다.
+2. 설정의 **사용 방식**에서 **Claude 구독 사용량 (Claude Code)**를 선택합니다.
+3. 로그인되어 있지 않으면 **Claude 로그인**을 누릅니다. Claude Code가 브라우저 로그인을 처리합니다. 진행되지 않으면 터미널에서 `claude auth login`을 실행하세요.
+4. 모델(Claude Code 기본값·Opus·Sonnet·Haiku)을 선택하고 단축키로 요청합니다.
+
+- `claude` 위치는 `~/.local/bin`, `~/.claude/local`, Homebrew 경로, 로그인 셸의 `PATH` 순으로 찾습니다. 찾지 못하면 설정에 실행 파일 경로를 직접 입력하세요.
+- 사용자의 Claude Code 설정·MCP 서버·스킬·도구를 불러오지 않고(`--setting-sources ""`, `--strict-mcp-config`, `--tools ""`), 세션 기록도 남기지 않습니다(`--no-session-persistence`).
+- StudyLens는 Claude Code의 인증 정보를 읽거나 저장하지 않습니다. 개인 Mac에서 본인 계정으로 쓰는 용도이며, 다른 사람에게 Claude 로그인을 제공하는 배포용 기능이 아닙니다.
 
 ## 앱 번들 만들기 및 설치
 

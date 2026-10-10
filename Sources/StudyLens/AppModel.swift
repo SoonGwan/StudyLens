@@ -74,6 +74,13 @@ final class AppModel: ObservableObject {
     @Published var chatGPTModelName: String {
         didSet { UserDefaults.standard.set(chatGPTModelName, forKey: "chatGPTModelName") }
     }
+    @Published var claudeModelName: String {
+        didSet { UserDefaults.standard.set(claudeModelName, forKey: "claudeModelName") }
+    }
+    @Published var claudeExecutablePath: String {
+        didSet { UserDefaults.standard.set(claudeExecutablePath, forKey: "claudeExecutablePath") }
+    }
+    @Published private(set) var claudeStatus: ClaudeCodeStatus?
     @Published private(set) var chatGPTProfiles: [ChatGPTProfile] = []
     @Published private(set) var activeChatGPTClientID = ""
     @Published private(set) var chatGPTModels: [ChatGPTModel] = []
@@ -83,7 +90,7 @@ final class AppModel: ObservableObject {
     private lazy var chatGPTAuth = ChatGPTAuthService()
 
     var activeChatGPTProfile: ChatGPTProfile? { chatGPTProfiles.first { $0.clientID == activeChatGPTClientID } }
-    var billingLabel: String { billingMode == .chatGPT ? "ChatGPT 구독 사용량" : "API 키 · 별도 결제" }
+    var billingLabel: String { billingMode.title }
     var isWorking: Bool { status == .selecting || status == .analyzing }
     @Published private(set) var resultBillingLabel = ""
 
@@ -92,6 +99,8 @@ final class AppModel: ObservableObject {
     private let captureService = ScreenCaptureService()
     private let selectedTextService = SelectedTextService()
     private let openAIService = OpenAIService()
+    private let claudeCodeService = ClaudeCodeService()
+    private var claudeLoginTask: Task<Void, Error>?
     private var started = false
 
     init(startServices: Bool = true) {
@@ -102,6 +111,8 @@ final class AppModel: ObservableObject {
         modelName = UserDefaults.standard.string(forKey: Self.modelKey) ?? "gpt-4.1-mini"
         billingMode = UserDefaults.standard.string(forKey: "billingMode").flatMap(BillingMode.init(rawValue:)) ?? .chatGPT
         chatGPTModelName = UserDefaults.standard.string(forKey: "chatGPTModelName") ?? ""
+        claudeModelName = UserDefaults.standard.string(forKey: "claudeModelName") ?? ""
+        claudeExecutablePath = UserDefaults.standard.string(forKey: "claudeExecutablePath") ?? ""
         if startServices {
             syncChatGPTProfiles()
             start()
@@ -143,7 +154,7 @@ final class AppModel: ObservableObject {
 
         do {
             status = .selecting
-            let credential = try await inferenceCredential()
+            let route = try await inferenceRoute()
             resultBillingLabel = billingLabel
             let capture = try await captureService.captureInteractiveRegion()
             capturedImage = NSImage(data: capture)
@@ -151,11 +162,7 @@ final class AppModel: ObservableObject {
             status = .analyzing
             NotificationCenter.default.post(name: .studyLensOpenResult, object: nil)
 
-            explanation = try await openAIService.explain(
-                imageData: capture,
-                credential: credential,
-                model: currentModelName
-            )
+            explanation = try await explain(imageData: capture, route: route)
             status = .ready
         } catch is CancellationError {
             status = .idle
@@ -187,14 +194,10 @@ final class AppModel: ObservableObject {
             selectedText = text
             capturedImage = nil
             status = .analyzing
-            let credential = try await inferenceCredential()
+            let route = try await inferenceRoute()
             resultBillingLabel = billingLabel
             NotificationCenter.default.post(name: .studyLensOpenResult, object: nil)
-            explanation = try await openAIService.explain(
-                selectedText: text,
-                credential: credential,
-                model: currentModelName
-            )
+            explanation = try await explain(selectedText: text, route: route)
             status = .ready
         } catch {
             hasSelectionError = error is SelectedTextError
@@ -219,9 +222,9 @@ final class AppModel: ObservableObject {
         let workflow = injectedWorkflow ?? QuickCodeCopy(
             readSelection: { [selectedTextService] in try await selectedTextService.readSelectedText(promptForPermission: false) },
             generate: { [self] text in
-                let credential = try await inferenceCredential()
+                let route = try await inferenceRoute()
                 resultBillingLabel = billingLabel
-                return try await openAIService.generateCode(selectedText: text, language: language, credential: credential, model: currentModelName)
+                return try await generateCode(selectedText: text, language: language, route: route)
             }
         )
         do {
@@ -292,6 +295,45 @@ final class AppModel: ObservableObject {
 
     private var currentModelName: String {
         (billingMode == .chatGPT ? chatGPTModelName : modelName).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private enum InferenceRoute {
+        case openAI(InferenceCredential)
+        case claudeCode
+    }
+
+    private func inferenceRoute() async throws -> InferenceRoute {
+        guard billingMode == .claudeCode else { return .openAI(try await inferenceCredential()) }
+        let path = claudeExecutablePath
+        _ = try await Task.detached { try ClaudeCodeService.locateExecutable(override: path) }.value
+        return .claudeCode
+    }
+
+    private func explain(imageData: Data, route: InferenceRoute) async throws -> String {
+        switch route {
+        case .openAI(let credential):
+            return try await openAIService.explain(imageData: imageData, credential: credential, model: currentModelName)
+        case .claudeCode:
+            return try await claudeCodeService.explain(imageData: imageData, executablePath: claudeExecutablePath, model: claudeModelName)
+        }
+    }
+
+    private func explain(selectedText: String, route: InferenceRoute) async throws -> String {
+        switch route {
+        case .openAI(let credential):
+            return try await openAIService.explain(selectedText: selectedText, credential: credential, model: currentModelName)
+        case .claudeCode:
+            return try await claudeCodeService.explain(selectedText: selectedText, executablePath: claudeExecutablePath, model: claudeModelName)
+        }
+    }
+
+    private func generateCode(selectedText: String, language: String, route: InferenceRoute) async throws -> String {
+        switch route {
+        case .openAI(let credential):
+            return try await openAIService.generateCode(selectedText: selectedText, language: language, credential: credential, model: currentModelName)
+        case .claudeCode:
+            return try await claudeCodeService.generateCode(selectedText: selectedText, language: language, executablePath: claudeExecutablePath, model: claudeModelName)
+        }
     }
 
     private func inferenceCredential() async throws -> InferenceCredential {
@@ -374,6 +416,41 @@ final class AppModel: ObservableObject {
             connectionMessage = revoked ? "ChatGPT 연결에서 로그아웃했습니다." : "앱에서 로그아웃했습니다. 서버의 연결 해제는 확인하지 못했으니 ChatGPT 설정에서도 연결을 해제해 주세요."
         } catch { connectionMessage = error.localizedDescription }
     }
+
+    func refreshClaudeStatus() async {
+        guard !connectionBusy else { return }
+        connectionBusy = true
+        defer { connectionBusy = false }
+        do {
+            claudeStatus = try await claudeCodeService.status(executablePath: claudeExecutablePath)
+            connectionMessage = claudeStatus?.loggedIn == true ? nil : ClaudeCodeError.notLoggedIn.localizedDescription
+        } catch {
+            claudeStatus = nil
+            connectionMessage = error.localizedDescription
+        }
+    }
+
+    func signInWithClaude() async {
+        guard !connectionBusy, !isWorking else { return }
+        connectionBusy = true
+        connectionMessage = "브라우저에서 Claude 로그인을 완료해 주세요. Claude Code가 로그인을 처리합니다."
+        let path = claudeExecutablePath
+        let task = Task { [claudeCodeService] in try await claudeCodeService.login(executablePath: path) }
+        claudeLoginTask = task
+        do {
+            try await task.value
+            claudeLoginTask = nil
+            connectionBusy = false
+            await refreshClaudeStatus()
+            if claudeStatus?.loggedIn == true { connectionMessage = "Claude 구독 사용이 연결되었습니다." }
+        } catch {
+            claudeLoginTask = nil
+            connectionBusy = false
+            connectionMessage = error is CancellationError ? "로그인을 취소했습니다." : error.localizedDescription
+        }
+    }
+
+    func cancelClaudeSignIn() { claudeLoginTask?.cancel() }
 
     private func syncChatGPTProfiles() {
         chatGPTProfiles = chatGPTAuth.profiles
