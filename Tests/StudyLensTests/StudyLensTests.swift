@@ -12,9 +12,9 @@ final class StudyLensTests: XCTestCase {
     }
 
     func testTutorInstructionsBlockLiveAssessmentAssistance() {
-        XCTAssertTrue(OpenAIService.instructions.contains("진행 중인 시험"))
-        XCTAssertTrue(OpenAIService.instructions.contains("자동 입력"))
-        XCTAssertTrue(OpenAIService.instructions.contains("감독 회피"))
+        XCTAssertTrue(StudyPrompt.instructions.contains("진행 중인 시험"))
+        XCTAssertTrue(StudyPrompt.instructions.contains("자동 입력"))
+        XCTAssertTrue(StudyPrompt.instructions.contains("감독 회피"))
     }
 
     func testMenuOnlyOpensForOptionClick() {

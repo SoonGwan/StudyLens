@@ -41,6 +41,8 @@ struct SettingsView: View {
 
                 if model.billingMode == .chatGPT {
                     chatGPTConnection
+                } else if model.billingMode == .claudeCode {
+                    claudeConnection
                 } else {
                     SecureField("API 키", text: $apiKey)
                         .textFieldStyle(.roundedBorder)
@@ -62,10 +64,14 @@ struct SettingsView: View {
             }
 
             Section("사용량") {
-                Text(model.billingMode == .chatGPT ? "이 앱의 요청은 ChatGPT·Codex와 구독 한도를 공유합니다. 크레딧 사용 허용 여부와 앱별 한도는 ChatGPT 설정에서 관리할 수 있습니다." : "API 키 방식은 OpenAI API 플랫폼의 결제와 사용 한도를 따릅니다.")
+                Text(usageDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Link("ChatGPT 사용량 관리", destination: URL(string: "https://chatgpt.com/settings/usage")!)
+                if model.billingMode == .claudeCode {
+                    Link("Claude 사용량 확인", destination: URL(string: "https://claude.ai/settings/usage")!)
+                } else {
+                    Link("ChatGPT 사용량 관리", destination: URL(string: "https://chatgpt.com/settings/usage")!)
+                }
             }
 
             Section("화면 기록 권한") {
@@ -100,11 +106,53 @@ struct SettingsView: View {
         .padding()
         .frame(width: 600, height: 700)
         .onAppear { apiKey = model.loadAPIKey() }
+        .task(id: model.billingMode) {
+            if model.billingMode == .claudeCode { await model.refreshClaudeStatus() }
+        }
         .onDisappear { stopShortcutRecording() }
         .alert("ChatGPT 구독 사용이 연결되었습니다", isPresented: $model.showPlanWelcome) {
             Button("확인", role: .cancel) {}
         } message: {
             Text("이 앱의 AI 요청은 기존 ChatGPT 구독 사용량 또는 허용한 크레딧에서 차감됩니다. ChatGPT 설정 → 사용량에서 관리할 수 있습니다.")
+        }
+    }
+
+    private var usageDescription: String {
+        switch model.billingMode {
+        case .chatGPT: return "이 앱의 요청은 ChatGPT·Codex와 구독 한도를 공유합니다. 크레딧 사용 허용 여부와 앱별 한도는 ChatGPT 설정에서 관리할 수 있습니다."
+        case .claudeCode: return "이 앱의 요청은 이 Mac의 Claude Code를 통해 실행되며 Claude Code와 같은 구독 사용 한도를 공유합니다."
+        case .apiKey: return "API 키 방식은 OpenAI API 플랫폼의 결제와 사용 한도를 따릅니다."
+        }
+    }
+
+    @ViewBuilder
+    private var claudeConnection: some View {
+        if let status = model.claudeStatus, status.loggedIn {
+            Label("Claude 구독 사용 중 · \(status.label)", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            Picker("모델", selection: $model.claudeModelName) {
+                ForEach(ClaudeCodeService.models, id: \.id) { item in Text(item.title).tag(item.id) }
+            }
+            .disabled(model.isWorking || model.connectionBusy)
+        } else {
+            Button("Claude 로그인") { Task { await model.signInWithClaude() } }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.connectionBusy || model.isWorking)
+        }
+        HStack {
+            Button("상태 새로고침") { Task { await model.refreshClaudeStatus() } }
+                .disabled(model.connectionBusy || model.isWorking)
+            if model.connectionBusy { ProgressView().controlSize(.small) }
+            if model.connectionBusy { Button("로그인 취소") { model.cancelClaudeSignIn() } }
+        }
+        TextField("claude 실행 파일 경로 (비워두면 자동으로 찾음)", text: $model.claudeExecutablePath)
+            .textFieldStyle(.roundedBorder)
+            .disabled(model.isWorking)
+        Text("이 Mac에 설치되어 로그인된 Claude Code(claude)를 실행해 요청합니다. StudyLens는 Claude 토큰을 읽거나 저장하지 않습니다.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        if let message = model.connectionMessage {
+            Text(message).font(.caption).textSelection(.enabled)
         }
     }
 
