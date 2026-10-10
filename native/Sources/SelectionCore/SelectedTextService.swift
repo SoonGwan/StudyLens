@@ -4,8 +4,8 @@ import Foundation
 
 /// Never sends Copy keystrokes, reads the clipboard, or substitutes the whole page.
 ///
-/// `excludedPIDs` replaces the original "own process" check: in the Electron build the helper is a
-/// separate process, so both the Electron main process (owner) and the helper itself count as "own app".
+/// The helper is a separate process, so both the Tauri main process (owner) and
+/// the helper itself count as "own app".
 @MainActor
 public final class SelectedTextService {
     private let excludedPIDs: Set<pid_t>
@@ -13,6 +13,7 @@ public final class SelectedTextService {
     private var activationObserver: NSObjectProtocol?
 
     public init(ownerPID: pid_t) {
+        precondition(Thread.isMainThread, "SelectedTextService requires an AppKit main run loop")
         excludedPIDs = [ownerPID, ProcessInfo.processInfo.processIdentifier]
         remember(NSWorkspace.shared.frontmostApplication)
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(

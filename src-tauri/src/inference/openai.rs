@@ -99,24 +99,38 @@ impl OpenAIClient {
             let body = &body[..body.len().min(65_536)];
             return Err(api_error(status, &serde_json::from_slice(body).unwrap_or(Value::Null)));
         }
-        let is_stream = response
+        let declared_stream = response
             .headers()
             .get("content-type")
             .and_then(|v| v.to_str().ok())
             .is_some_and(|v| v.to_ascii_lowercase().contains("text/event-stream"));
+        // Plan-usage responses can omit Content-Type. Inspect a bounded prefix rather
+        // than buffering an entire SSE stream and trying to parse it as one JSON body.
+        let mut bytes = response.bytes_stream();
+        let mut prefix = Vec::new();
+        let is_stream = if declared_stream {
+            true
+        } else {
+            loop {
+                match bytes.next().await {
+                    Some(chunk) => prefix.extend_from_slice(&chunk?),
+                    None => break false,
+                }
+                if let Some(stream) = stream_prefix(&prefix) {
+                    break stream;
+                }
+                if prefix.len() > 65_536 {
+                    return Err(InferenceError::InvalidResponse);
+                }
+            }
+        };
         if is_stream {
             let mut framer = EventFramer::default();
             let mut accumulator = ResponseAccumulator::default();
             let mut reporter = ProgressReporter::default();
-            let mut bytes = response.bytes_stream();
-            let mut pending = Vec::new();
+            let mut pending = framer.push(&prefix)?;
+            let mut ended = false;
             loop {
-                let chunk = bytes.next().await;
-                let events = match &chunk {
-                    Some(chunk) => framer.push(chunk.as_ref().map_err(|e| InferenceError::Network(e.to_string()))?)?,
-                    None => framer.finish()?.into_iter().collect(),
-                };
-                pending.extend(events);
                 for event in pending.drain(..) {
                     reporter.observe(&event, None, &notify);
                     let completed = accumulator.consume(&event)?;
@@ -125,12 +139,26 @@ impl OpenAIClient {
                         return Ok(text);
                     }
                 }
-                if chunk.is_none() {
+                if ended {
                     return Err(InferenceError::Interrupted);
+                }
+                match bytes.next().await {
+                    Some(chunk) => pending = framer.push(&chunk?)?,
+                    None => {
+                        ended = true;
+                        pending = framer.finish()?.into_iter().collect();
+                    }
                 }
             }
         }
-        let body = response.bytes().await?;
+        let mut body = prefix;
+        while let Some(chunk) = bytes.next().await {
+            let chunk = chunk?;
+            if body.len().saturating_add(chunk.len()) > 20 * 1024 * 1024 {
+                return Err(InferenceError::InvalidResponse);
+            }
+            body.extend_from_slice(&chunk);
+        }
         if body.len() > 20 * 1024 * 1024 {
             return Err(InferenceError::InvalidResponse);
         }
@@ -156,6 +184,22 @@ impl OpenAIClient {
         notify(Progress::Completed);
         Ok(text.to_string())
     }
+}
+
+/// None means a transport chunk ended before a recognizable prefix was complete.
+fn stream_prefix(bytes: &[u8]) -> Option<bool> {
+    let bytes = bytes.trim_ascii_start();
+    if bytes.is_empty() {
+        return None;
+    }
+    let markers: &[&[u8]] = &[b"data:", b"event:", b"id:", b"retry:", b":"];
+    if markers.iter().any(|marker| bytes.starts_with(marker)) {
+        return Some(true);
+    }
+    if markers.iter().any(|marker| marker.starts_with(bytes)) {
+        return None;
+    }
+    Some(false)
 }
 
 /// Turns stream events into first-event / first-text / completed milestones.
@@ -324,8 +368,9 @@ pub mod tests {
                         break;
                     }
                 }
+                let content_type = if kind.is_empty() { String::new() } else { format!("Content-Type: {kind}\r\n") };
                 let reply = format!(
-                    "HTTP/1.1 {status} X\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    "HTTP/1.1 {status} X\r\n{content_type}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
                     body.len()
                 );
                 socket.write_all(reply.as_bytes()).await.unwrap();
@@ -369,6 +414,41 @@ pub mod tests {
         let (base, _) = mock(vec![(200, "text/event-stream", "data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}\n\n".into())]).await;
         let error = provider(&base, CredentialKind::ChatGpt).explain_text("x").await.unwrap_err();
         assert_eq!(error, InferenceError::Interrupted);
+    }
+
+    #[tokio::test]
+    async fn stream_without_or_with_incorrect_content_type_is_consumed_until_completed() {
+        for kind in ["", "application/json", "application/octet-stream"] {
+            let (base, _) = mock(vec![(200, kind, format!(": keepalive\n\n{STREAM}"))]).await;
+            assert_eq!(provider(&base, CredentialKind::ChatGpt).explain_text("x").await.unwrap(), "단계별 설명");
+        }
+    }
+
+    #[tokio::test]
+    async fn missing_content_type_does_not_turn_partial_or_failed_stream_into_success() {
+        let body = "data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}\n\n";
+        let (base, _) = mock(vec![(200, "", body.into())]).await;
+        assert_eq!(provider(&base, CredentialKind::ChatGpt).explain_text("x").await.unwrap_err(), InferenceError::Interrupted);
+        let body = "data: {\"type\":\"response.failed\",\"response\":{\"error\":{\"code\":\"subscription_sharing_usage_limit_exceeded\"}}}\n\n";
+        let (base, _) = mock(vec![(200, "", body.into())]).await;
+        assert!(matches!(provider(&base, CredentialKind::ChatGpt).explain_text("x").await, Err(InferenceError::OpenAI { status: 429, .. })));
+    }
+
+    #[test]
+    fn stream_detection_waits_for_split_markers_but_recognizes_json_immediately() {
+        for marker in [b"data:".as_slice(), b"event:", b"id:", b"retry:"] {
+            for end in 0..marker.len() { assert_eq!(stream_prefix(&marker[..end]), None); }
+            assert_eq!(stream_prefix(marker), Some(true));
+        }
+        assert_eq!(stream_prefix(b" \r\n: ping"), Some(true));
+        assert_eq!(stream_prefix(b" \n{\"status\":"), Some(false));
+    }
+
+    #[tokio::test]
+    async fn completed_json_without_content_type_still_works() {
+        let body = json!({"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"answer"}]}]});
+        let (base, _) = mock(vec![(200, "", body.to_string())]).await;
+        assert_eq!(provider(&base, CredentialKind::ApiKey).explain_text("x").await.unwrap(), "answer");
     }
 
     #[tokio::test]

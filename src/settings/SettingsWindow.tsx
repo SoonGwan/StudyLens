@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, isMac, useSettingsView, type BillingMode, type Settings, type SettingsView, type Shortcuts } from "../lib/ipc";
 import { acceleratorFromEvent, displayAccelerator } from "../lib/shortcut";
 
@@ -270,6 +270,18 @@ function ClaudePanel({ view, save }: { view: SettingsView; save: Save }) {
 function ChatGptPanel({ view, save }: { view: SettingsView; save: Save }) {
   const { busy, chatgptModels } = view.connection;
   const active = view.chatgptProfiles.find((p) => p.clientId === view.activeClientId);
+  const requestedProfile = useRef<string | null>(null);
+  useEffect(() => {
+    if (!active?.permitsInference) {
+      requestedProfile.current = null;
+      return;
+    }
+    if (busy || view.working || chatgptModels.length || requestedProfile.current === active.clientId) return;
+    // The catalog is in memory, unlike the saved login. Load it once on reopening
+    // settings, including StrictMode remounts; failures remain manually retryable.
+    requestedProfile.current = active.clientId;
+    void api.chatgptRefreshModels().catch(() => {});
+  }, [active?.clientId, active?.permitsInference, busy, view.working, chatgptModels.length]);
   return (
     <>
       {view.chatgptProfiles.length > 0 && (
@@ -296,7 +308,7 @@ function ChatGptPanel({ view, save }: { view: SettingsView; save: Save }) {
       {active?.permitsInference && (
         <Row label="모델">
           <select value={view.settings.chatgptModel} disabled={busy || !chatgptModels.length} onChange={(e) => save({ chatgptModel: e.target.value })}>
-            {!chatgptModels.length && <option value={view.settings.chatgptModel}>불러오는 중…</option>}
+            {!chatgptModels.length && <option value={view.settings.chatgptModel}>{busy ? "불러오는 중…" : "모델 목록이 없습니다 · 새로고침"}</option>}
             {chatgptModels.map((m) => (
               <option key={m.slug} value={m.slug}>{m.displayName}</option>
             ))}

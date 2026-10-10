@@ -10,7 +10,8 @@
     "tauri": "tauri",
     "app:dev": "bun run build:helper && tauri dev",
     "app:build": "bun run build:helper && tauri build",
-    "test": "vitest run && cargo test --manifest-path src-tauri/Cargo.toml && swift test --package-path native",
+    "test": "vitest run && cargo test --manifest-path src-tauri/Cargo.toml && swift test --package-path native && bun run test:helper",
+    "test:helper": "bun run build:helper && bun scripts/test-helper.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

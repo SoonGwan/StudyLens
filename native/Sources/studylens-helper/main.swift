@@ -128,4 +128,9 @@ Task { @MainActor in
     exit(0)
 }
 
-dispatchMain()
+// dispatchMain() terminates the main thread in a command-line process. MainActor work
+// can then run on a worker, and NSWorkspace's cached frontmost app/activation events
+// stop updating. Keep a real AppKit event loop, without a Dock icon or taking focus.
+let application = NSApplication.shared
+application.setActivationPolicy(.prohibited)
+application.run()
