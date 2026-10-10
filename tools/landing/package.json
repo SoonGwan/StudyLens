@@ -1,0 +1,13 @@
+{
+  "name": "studylens-landing-checks",
+  "private": true,
+  "scripts": {
+    "check": "node ../../scripts/check_landing.cjs",
+    "assets": "node ../../scripts/render_landing_assets.cjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.11.1",
+    "playwright-core": "1.63.0",
+    "sharp": "0.34.5"
+  }
+}

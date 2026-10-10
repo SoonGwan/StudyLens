@@ -1,0 +1,22 @@
+이진 탐색은 정렬된 배열에서 탐색 범위를 절반씩 줄이는 방법입니다.
+
+1. 가운데 값과 찾는 값을 비교합니다.
+2. 찾는 값이 더 크면 오른쪽, 더 작으면 왼쪽을 살펴봅니다.
+3. 같은 값을 찾거나 탐색 범위가 없어질 때까지 반복합니다.
+
+```python
+def binary_search(items, target):
+    left, right = 0, len(items) - 1
+    while left <= right:
+        mid = (left + right) // 2
+        if items[mid] == target:
+            return mid
+        if items[mid] < target:
+            left = mid + 1
+        else:
+            right = mid - 1
+    return -1
+```
+
+정렬된 [2, 4, 7, 9, 12]에서 9를 찾으면 인덱스 3을 반환합니다.
+시간 복잡도는 O(log n)입니다. 입력 배열은 미리 정렬되어 있어야 합니다.

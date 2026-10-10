@@ -9,3 +9,4 @@
 !.env.example
 node_modules/
 dist/
+__pycache__/

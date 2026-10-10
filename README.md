@@ -1,5 +1,8 @@
 # StudyLens
 
+[제품 소개 · 사용 흐름 · 설치 안내](https://study-lens.no-money-do-you-have-money.com/)
+| [랜딩 개발 안내](landing/README.md)
+
 StudyLens는 macOS 메뉴바에서 실행되는 개인 학습 보조 MVP입니다. 세 가지 입력 방식을 제공합니다.
 
 1. 전역 단축키로 화면 영역을 직접 선택하면 캡처 이미지를 그대로 OpenAI 비전 모델에 보내 단계별 설명을 받습니다.
