@@ -29,7 +29,7 @@ struct SettingsView: View {
                     ForEach(["Java", "Python", "C++", "C", "JavaScript", "TypeScript", "Swift", "Kotlin", "Go", "Rust"], id: \.self) { Text($0).tag($0) }
                 }
                 .disabled(model.isWorking)
-                Text("문제를 드래그하고 전용 단축키를 누르면 결과 창 없이 코드만 클립보드에 저장합니다. 본문에 언어를 지정하면 그 요청을 우선합니다. 작성이 끝난 뒤 직접 ⌘V로 붙여넣으세요.")
+                Text("자동 복사 성공은 코드 형식 인식·클립보드 저장만 뜻하며 컴파일·정답 검증은 아닙니다. 구분자 없는 원문은 단독 Java 클래스만 지원합니다. 다른 언어는 닫힌 Markdown 코드 블록이 필요합니다. 문제를 드래그하고 전용 단축키를 누르면 결과 창 없이 코드만 클립보드에 저장합니다. 본문에 언어를 지정하면 그 요청을 우선합니다. 작성이 끝난 뒤 직접 ⌘V로 붙여넣으세요.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -63,6 +63,33 @@ struct SettingsView: View {
                 }
             }
 
+            Section("선택 텍스트 입력") {
+                if model.billingMode == .claudeCode {
+                    Text("Claude 연결에서는 추가 지시와 기존 영역 캡처를 사용할 수 있습니다. 선택 텍스트와 그림을 함께 첨부하는 옵션은 현재 OpenAI 연결에서 지원합니다.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Toggle("선택 텍스트·코드 요청에 그림 영역 첨부", isOn: $model.attachImageToSelection)
+                    .disabled(model.isWorking || model.billingMode == .claudeCode)
+                TextField("추가 지시 (선택 사항)", text: $model.additionalInstructions, axis: .vertical)
+                    .lineLimit(2...4)
+                    .disabled(model.isWorking)
+                Text("텍스트를 먼저 읽은 뒤 첨부할 그림 영역을 직접 선택합니다. 첨부를 끄면 기존 텍스트 단축키 흐름을 유지합니다. 선택 본문 30,000자, 추가 지시 2,000자, PNG 한 장 10 MiB 이하를 전송합니다. 이미지 입력을 지원하는 모델과 화면 기록 권한이 필요합니다.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("추론 강도") {
+                Picker("강도", selection: Binding(get: { model.reasoningPreference }, set: { model.reasoningPreference = $0 })) {
+                    ForEach(ModelCapabilities.preferences(for: model.currentModelName)) { preference in
+                        Text(preference.title).tag(preference)
+                    }
+                }
+                .disabled(model.isWorking)
+                Text(model.billingMode == .claudeCode ? "Claude Code 기본 추론 설정 사용" : "실제 전송: \(model.selectedReasoningEffort.map { "reasoning.effort = \($0)" } ?? "reasoning 필드 생략 · 모델 기본값")")
+                    .font(.caption).foregroundStyle(.secondary)
+                Text("모델과 연결 방식별로 저장됩니다. 낮은 강도는 대기 시간과 추론 토큰을 줄일 수 있지만 코드 품질은 직접 비교해야 합니다. 지원이 확인되지 않은 모델은 기본값만 사용합니다.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("사용량") {
                 Text(usageDescription)
                     .font(.caption)
@@ -74,27 +101,7 @@ struct SettingsView: View {
                 }
             }
 
-            Section("화면 기록 권한") {
-                Text("영역 캡처를 위해 macOS 화면 및 시스템 오디오 기록 권한이 필요합니다.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Button("시스템 설정 열기") {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-                        NSWorkspace.shared.open(url)
-                    }
-                }
-            }
-
-            Section("접근성 권한") {
-                Text("선택한 텍스트를 읽는 기능에만 필요합니다. 키 입력이나 자동 붙여넣기에는 사용하지 않습니다.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Button("손쉬운 사용 설정 열기") {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                        NSWorkspace.shared.open(url)
-                    }
-                }
-            }
+            PermissionStatusView()
 
             Section("사용 원칙") {
                 Text("StudyLens는 개인 학습용입니다. 진행 중인 시험·감독 환경의 답안 제공, 앱 위장, 자동 입력 기능은 포함하지 않습니다.")

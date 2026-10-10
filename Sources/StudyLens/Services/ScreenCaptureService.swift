@@ -22,8 +22,9 @@ enum ScreenCaptureError: LocalizedError, Equatable {
 }
 
 struct ScreenCaptureService {
-    func captureInteractiveRegion() async throws -> Data {
-        if !CGPreflightScreenCaptureAccess(), !CGRequestScreenCaptureAccess() {
+    func captureInteractiveRegion(promptForPermission: Bool = true) async throws -> Data {
+        try Task.checkCancellation()
+        if !CGPreflightScreenCaptureAccess(), !(promptForPermission && CGRequestScreenCaptureAccess()) {
             throw ScreenCaptureError.permissionDenied
         }
 
@@ -31,25 +32,51 @@ struct ScreenCaptureService {
             .appendingPathComponent("StudyLens-\(UUID().uuidString).png")
         defer { try? FileManager.default.removeItem(at: target) }
 
-        let exitCode: Int32 = try await withCheckedThrowingContinuation { continuation in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-            process.arguments = ["-i", "-x", "-t", "png", target.path]
-            process.terminationHandler = { finished in
-                continuation.resume(returning: finished.terminationStatus)
-            }
-
-            do {
-                try process.run()
-            } catch {
-                continuation.resume(throwing: ScreenCaptureError.launchFailed(error.localizedDescription))
-            }
+        let capture = CancellableCaptureProcess(target: target)
+        let exitCode = try await withTaskCancellationHandler {
+            try await capture.run()
+        } onCancel: {
+            capture.cancel()
         }
 
+        try Task.checkCancellation()
         guard exitCode == 0 else { throw ScreenCaptureError.cancelled }
         guard let data = try? Data(contentsOf: target), !data.isEmpty else {
             throw ScreenCaptureError.emptyCapture
         }
         return data
+    }
+}
+
+/// Serialize cancellation with launch so cancellation before launch cannot orphan the picker.
+private final class CancellableCaptureProcess: @unchecked Sendable {
+    private let lock = NSLock()
+    private let process = Process()
+    private var cancelled = false
+
+    init(target: URL) {
+        process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        process.arguments = ["-i", "-x", "-t", "png", target.path]
+    }
+
+    func run() async throws -> Int32 {
+        try await withCheckedThrowingContinuation { continuation in
+            lock.lock()
+            defer { lock.unlock() }
+            guard !cancelled else {
+                continuation.resume(throwing: CancellationError())
+                return
+            }
+            process.terminationHandler = { continuation.resume(returning: $0.terminationStatus) }
+            do { try process.run() }
+            catch { continuation.resume(throwing: ScreenCaptureError.launchFailed(error.localizedDescription)) }
+        }
+    }
+
+    func cancel() {
+        lock.lock()
+        defer { lock.unlock() }
+        cancelled = true
+        if process.isRunning { process.terminate() }
     }
 }

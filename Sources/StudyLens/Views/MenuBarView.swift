@@ -26,6 +26,12 @@ struct MenuBarView: View {
             }
             if let error = model.errorMessage { Text(error).font(.caption).textSelection(.enabled) }
             if let error = model.shortcutError { Text(error).font(.caption).foregroundStyle(.red) }
+            if let progress = model.requestProgress {
+                RequestProgressView(progress: progress, isWorking: model.isWorking, cancel: model.cancelCurrentRequest)
+            }
+            if model.attachImageToSelection {
+                Text("텍스트·코드 요청: 직접 선택한 그림 영역 첨부").font(.caption).foregroundStyle(.secondary)
+            }
 
             Button {
                 Task { await model.captureAndAnalyze() }

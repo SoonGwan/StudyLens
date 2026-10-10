@@ -26,10 +26,16 @@ struct QuickCodeCopy {
     var generate: (String) async throws -> String
     var write: (String) -> Bool = { ResponseClipboard.copy($0) }
 
-    func run(onSelection: (String) -> Void = { _ in }, onResponse: (String) -> Void = { _ in }) async throws -> Int {
+    func run(onSelection: (String) -> Void = { _ in }, onResponse: (String) -> Void = { _ in },
+             canCommit: () -> Bool = { true }) async throws -> Int {
+        try Task.checkCancellation()
         let text = try await readSelection()
+        try Task.checkCancellation()
+        guard canCommit() else { throw CancellationError() }
         onSelection(text)
         let response = Self.normalizeCompleteJavaSource(try await generate(text))
+        try Task.checkCancellation()
+        guard canCommit() else { throw CancellationError() }
         onResponse(response)
         let blocks = ResponseDocument(response).blocks.filter(\.isCode)
         guard !blocks.isEmpty else { throw QuickCodeCopyError.noCode }
@@ -37,6 +43,8 @@ struct QuickCodeCopy {
         let block = blocks[0]
         guard block.isComplete else { throw QuickCodeCopyError.incompleteCode }
         guard !block.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw QuickCodeCopyError.emptyCode }
+        try Task.checkCancellation()
+        guard canCommit() else { throw CancellationError() }
         guard write(block.text) else { throw QuickCodeCopyError.clipboardFailed }
         return block.id
     }
@@ -51,7 +59,7 @@ struct QuickCodeCopy {
               trimmed.hasSuffix("}"), balancedJavaDelimiters(trimmed) else { return response }
         let length = max(3, (trimmed.components(separatedBy: "\n").map { $0.prefix(while: { $0 == "`" }).count }.max() ?? 0) + 1)
         let fence = String(repeating: "`", count: length)
-        return fence + "java\n" + response + (response.hasSuffix("\n") ? "" : "\n") + fence
+        return fence + "java\n" + response + (response.utf8.last == 10 ? "" : "\n") + fence
     }
 
     private static func balancedJavaDelimiters(_ source: String) -> Bool {
@@ -65,7 +73,7 @@ struct QuickCodeCopy {
         while index < chars.count {
             let ch = chars[index]
             let next = index + 1 < chars.count ? chars[index + 1] : nil
-            if lineComment { if ch == "\n" { lineComment = false } }
+            if lineComment { if ch == "\n" || ch == "\r\n" || ch == "\r" { lineComment = false } }
             else if blockComment { if ch == "*", next == "/" { blockComment = false; index += 1 } }
             else if let activeQuote = quote {
                 if ch == "\\" { index += 1 }
