@@ -31,11 +31,11 @@ pub fn parse(source: &str) -> Vec<Block> {
     let mut fence: Option<Fence> = None;
 
     fn flush(blocks: &mut Vec<Block>, lines: &mut Vec<&str>, language: Option<String>, closed: bool) {
-        if lines.is_empty() {
+        if lines.is_empty() && language.is_none() {
             return;
         }
         let mut text = lines.join("\n");
-        if closed {
+        if closed && !lines.is_empty() {
             text.push('\n');
         }
         if language.is_some() || !text.trim().is_empty() {
@@ -132,6 +132,14 @@ mod tests {
         let code = "class Solution {\r\n\tint x;\r\n}\r\n";
         let blocks = parse(&format!("```java\r\n{code}```\r\n"));
         assert_eq!(blocks[0].text, code);
+    }
+
+    #[test]
+    fn immediately_closed_fence_is_an_empty_code_block() {
+        let blocks = parse("```java\n```");
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].text, "");
+        assert!(blocks[0].is_code() && blocks[0].is_complete);
     }
 
     #[test]

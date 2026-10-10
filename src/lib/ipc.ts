@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 
 export type Status = "idle" | "selecting" | "analyzing" | "ready" | "failed";
-export type Hint = "accessibility" | "screenRecording" | "chatGptUsage" | "claudeUsage" | "settings";
+export type Hint = "accessibility" | "screenRecording" | "input" | "chatGptUsage" | "claudeUsage" | "settings";
 export type BillingMode = "claudeCode" | "chatGpt" | "apiKey";
 
 export interface Block {
@@ -26,6 +26,15 @@ export interface ResultState {
   copiedCodeId: number | null;
   quickCopyMessage: string | null;
   billingLabel: string;
+  progress: RequestProgress | null;
+}
+
+export interface RequestProgress {
+  stage: string;
+  stageTitle: string;
+  startedAtMs: number;
+  endedAtMs: number | null;
+  diagnostics: string;
 }
 
 export interface Shortcuts {
@@ -42,6 +51,9 @@ export interface Settings {
   chatgptModel: string;
   claudeModel: string;
   claudePath: string;
+  reasoning: Record<string, string>;
+  attachImage: boolean;
+  additionalInstructions: string;
   hostId: string;
   onboarded: boolean;
 }
@@ -67,6 +79,8 @@ export interface SettingsView {
   shortcutErrors: string[];
   codeLanguages: string[];
   claudeModels: [string, string][];
+  reasoning: { choices: string[]; selected: string; sent: string | null };
+  imageSupported: boolean;
   platform: "macos" | "windows";
   working: boolean;
 }
@@ -75,6 +89,9 @@ export const api = {
   getResult: () => invoke<ResultState>("get_result"),
   getSettings: () => invoke<SettingsView>("get_settings"),
   start: (action: "capture" | "text" | "code") => invoke("start", { action }),
+  cancel: () => invoke("cancel_request"),
+  setReasoning: (effort: string) => invoke("set_reasoning", { effort }),
+  permissionStatus: () => invoke<{ accessibility: boolean; screenRecording: boolean } | null>("permission_status"),
   copyExplanation: () => invoke("copy_explanation"),
   copyCode: (id: number) => invoke("copy_code", { id }),
   saveSettings: (settings: Settings) => invoke("save_settings", { settings }),

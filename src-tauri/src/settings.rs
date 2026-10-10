@@ -1,6 +1,7 @@
 //! User preferences, stored as JSON in the app config directory. Secrets are not here.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -12,6 +13,16 @@ pub enum BillingMode {
 }
 
 impl BillingMode {
+    pub fn model(self, settings: &Settings) -> String {
+        match self {
+            BillingMode::ClaudeCode => &settings.claude_model,
+            BillingMode::ChatGpt => &settings.chatgpt_model,
+            BillingMode::ApiKey => &settings.api_model,
+        }
+        .trim()
+        .to_string()
+    }
+
     pub fn title(self) -> &'static str {
         match self {
             BillingMode::ClaudeCode => "Claude 구독 (Claude Code)",
@@ -49,6 +60,12 @@ pub struct Settings {
     pub chatgpt_model: String,
     pub claude_model: String,
     pub claude_path: String,
+    /// Reasoning effort per `mode:model` (see `inference::capabilities`).
+    pub reasoning: BTreeMap<String, String>,
+    /// Text and code requests also ask for a picture region (OpenAI connections only).
+    pub attach_image: bool,
+    /// Sent after the selection as "추가 지시".
+    pub additional_instructions: String,
     /// Stable per-install identifier sent when registering a ChatGPT connection.
     pub host_id: String,
     pub onboarded: bool,
@@ -64,6 +81,9 @@ impl Default for Settings {
             chatgpt_model: String::new(),
             claude_model: String::new(),
             claude_path: String::new(),
+            reasoning: BTreeMap::new(),
+            attach_image: false,
+            additional_instructions: String::new(),
             host_id: format!("urn:uuid:{}", uuid::Uuid::new_v4()),
             onboarded: false,
         }

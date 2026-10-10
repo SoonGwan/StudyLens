@@ -1,7 +1,6 @@
 //! IPC commands for the windows, plus tray and shortcut dispatch.
 
-use crate::core::{Core, ResultState, SettingsView};
-use crate::hotkeys::Action;
+use crate::core::{Action, Core, ResultState, SettingsView};
 use crate::settings::Settings;
 use crate::ui;
 use std::sync::Arc;
@@ -10,14 +9,7 @@ use tauri::{AppHandle, Manager, State};
 type CoreState<'a> = State<'a, Arc<Core>>;
 
 pub fn run(app: &AppHandle, action: Action) {
-    let core = app.state::<Arc<Core>>().inner().clone();
-    tauri::async_runtime::spawn(async move {
-        match action {
-            Action::Capture => core.capture_and_analyze().await,
-            Action::Text => core.analyze_selected_text().await,
-            Action::Code => core.copy_selected_code().await,
-        }
-    });
+    app.state::<Arc<Core>>().start(action);
 }
 
 pub fn menu_action(app: &AppHandle, id: &str) {
@@ -25,6 +17,7 @@ pub fn menu_action(app: &AppHandle, id: &str) {
         "capture" => run(app, Action::Capture),
         "text" => run(app, Action::Text),
         "code" => run(app, Action::Code),
+        "cancel" => app.state::<Arc<Core>>().cancel(),
         "result" => ui::show_result(app),
         "settings" => ui::show_settings(app),
         "quit" => app.exit(0),
@@ -50,6 +43,29 @@ pub fn start(app: AppHandle, action: String) {
         _ => Action::Code,
     };
     run(&app, action);
+}
+
+#[tauri::command]
+pub fn cancel_request(core: CoreState) {
+    core.cancel();
+}
+
+#[tauri::command]
+pub fn set_reasoning(core: CoreState, effort: String) -> Result<(), String> {
+    core.set_reasoning(&effort)
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Permissions {
+    accessibility: bool,
+    screen_recording: bool,
+}
+
+/// What macOS currently grants this running app; `None` where the OS has no such switch.
+#[tauri::command]
+pub fn permission_status() -> Option<Permissions> {
+    crate::platform::permission_status().map(|(accessibility, screen_recording)| Permissions { accessibility, screen_recording })
 }
 
 #[tauri::command]

@@ -12,11 +12,23 @@ extern "C" {
     fn CGRequestScreenCaptureAccess() -> bool;
 }
 
+#[link(name = "ApplicationServices", kind = "framework")]
+extern "C" {
+    fn AXIsProcessTrusted() -> bool;
+}
+
+/// What macOS currently allows this running app (not whether a given app exposes its selection).
+pub fn permission_status() -> Option<(bool, bool)> {
+    // SAFETY: argument-free status queries.
+    unsafe { Some((AXIsProcessTrusted(), CGPreflightScreenCaptureAccess())) }
+}
+
 /// The system's own crosshair selection (`screencapture -i`): Esc cancels, nothing else
 /// is captured.
-pub async fn capture_region(_app: &tauri::AppHandle) -> Result<Vec<u8>, CaptureError> {
+/// `prompt` is false for the silent code-copy flow: no permission dialog, just an error.
+pub async fn capture_region(_app: &tauri::AppHandle, prompt: bool) -> Result<Vec<u8>, CaptureError> {
     // SAFETY: plain CoreGraphics calls without arguments.
-    let granted = unsafe { CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() };
+    let granted = unsafe { CGPreflightScreenCaptureAccess() || (prompt && CGRequestScreenCaptureAccess()) };
     if !granted {
         return Err(CaptureError::PermissionDenied);
     }

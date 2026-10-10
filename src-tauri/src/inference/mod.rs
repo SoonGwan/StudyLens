@@ -2,12 +2,23 @@
 //! per request from the selected billing mode, so a new backend only needs to implement
 //! [`InferenceProvider`].
 
+pub mod capabilities;
 pub mod claude_code;
 pub mod openai;
 pub mod prompts;
 pub mod sse;
 
 use async_trait::async_trait;
+
+/// Timing milestones a provider reports while a response streams in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Progress {
+    FirstEvent,
+    FirstText,
+    Completed,
+}
+
+pub type ProgressFn = std::sync::Arc<dyn Fn(Progress) + Send + Sync>;
 
 #[async_trait]
 pub trait InferenceProvider: Send + Sync {
@@ -36,8 +47,10 @@ pub enum InferenceError {
     ClaudeNotLoggedIn,
     #[error("Claude 오류: {0}")]
     Claude(String),
-    #[error("응답 시간이 초과되었습니다. 다시 요청해 주세요.")]
+    #[error("요청 시간이 초과되었습니다. 메뉴에서 직접 다시 요청해 주세요.")]
     TimedOut,
+    #[error("{0}")]
+    Input(#[from] capabilities::InputError),
 }
 
 impl From<reqwest::Error> for InferenceError {

@@ -18,8 +18,6 @@ pub enum QuickCodeError {
 }
 
 pub struct Extracted {
-    /// The response as shown in the result window (bare Java is wrapped in a fence).
-    pub response: String,
     pub block: Block,
 }
 
@@ -38,7 +36,7 @@ pub fn extract(response: &str) -> Result<Extracted, QuickCodeError> {
     if block.text.trim().is_empty() {
         return Err(QuickCodeError::EmptyCode);
     }
-    Ok(Extracted { response, block })
+    Ok(Extracted { block })
 }
 
 static JAVA_CLASS_START: LazyLock<Regex> = LazyLock::new(|| {
@@ -123,6 +121,14 @@ mod tests {
         assert_eq!(extract("```java\nint x;").err(), Some(QuickCodeError::IncompleteCode));
         assert_eq!(extract("```java\nint x;\n```\n```java\nint y;\n```").err(), Some(QuickCodeError::MultipleCodeBlocks(2)));
         assert_eq!(extract("```java\n\n```").err(), Some(QuickCodeError::EmptyCode));
+        assert_eq!(extract("```java\n```").err(), Some(QuickCodeError::EmptyCode));
+    }
+
+    #[test]
+    fn crlf_java_with_line_comments_is_recognised_without_changing_line_endings() {
+        let code = "// 가정\r\nclass Solution {\r\n    // } 괄호 주석\r\n    int x = 1;\r\n}\r\n";
+        let extracted = extract(code).unwrap();
+        assert_eq!(extracted.block.text, code);
     }
 
     #[test]

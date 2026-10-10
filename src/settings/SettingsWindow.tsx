@@ -45,8 +45,11 @@ export function SettingsWindow() {
           {s.billingMode === "claudeCode" && <ClaudePanel view={view} save={save} />}
           {s.billingMode === "chatGpt" && <ChatGptPanel view={view} save={save} />}
           {s.billingMode === "apiKey" && <ApiKeyPanel view={view} save={save} />}
+          <ReasoningRow view={view} />
           {view.connection.message && <p className="message selectable">{view.connection.message}</p>}
         </Section>
+
+        <InputSection view={view} save={save} />
 
         <Section title="단축키" note="Command·Control·Option 중 하나를 포함해야 합니다.">
           <ShortcutRow name="영역 캡처" field="capture" view={view} save={save} />
@@ -58,7 +61,10 @@ export function SettingsWindow() {
           {error && <p className="message error-text">{error}</p>}
         </Section>
 
-        <Section title="코드 바로 복사" note="결과 창 없이 코드만 클립보드에 넣습니다. 본문에 언어를 적으면 그 언어를 우선합니다.">
+        <Section
+          title="코드 바로 복사"
+          note="결과 창 없이 코드만 클립보드에 넣습니다. 본문에 언어를 적으면 그 언어를 우선합니다. 복사 성공은 코드 형식 인식과 클립보드 저장만 뜻하며 컴파일·정답 검증은 아닙니다. 구분자 없는 원문은 단독 Java 클래스만 인식합니다."
+        >
           <Row label="기본 언어">
             <select value={s.codeLanguage} onChange={(e) => save({ codeLanguage: e.target.value })}>
               {view.codeLanguages.map((l) => (
@@ -68,16 +74,7 @@ export function SettingsWindow() {
           </Row>
         </Section>
 
-        {view.platform === "macos" && (
-          <Section title="권한" note="macOS가 처음 사용할 때 묻습니다. 거절했다면 여기서 다시 허용하세요.">
-            <Row label="화면 기록" detail="영역 캡처">
-              <button className="btn small" onClick={() => api.openPrivacySettings("screen")}>열기</button>
-            </Row>
-            <Row label="손쉬운 사용" detail="선택 텍스트 읽기">
-              <button className="btn small" onClick={() => api.openPrivacySettings("accessibility")}>열기</button>
-            </Row>
-          </Section>
-        )}
+        {view.platform === "macos" && <PermissionSection />}
 
         <p className="footnote">
           StudyLens는 개인 학습용입니다. 진행 중인 시험·감독 환경에서는 정답 대신 개념 복습만 안내하며, 창 숨기기·위장·자동 입력 기능은 없습니다.
@@ -88,6 +85,104 @@ export function SettingsWindow() {
 }
 
 type Save = (patch: Partial<Settings>) => void;
+
+const EFFORT_LABELS: Record<string, string> = {
+  low: "빠르게 (low)",
+  medium: "균형 (medium)",
+  high: "깊게 (high)",
+  modelDefault: "모델 기본값",
+};
+
+function ReasoningRow({ view }: { view: SettingsView }) {
+  const { choices, selected, sent } = view.reasoning;
+  const claude = view.settings.billingMode === "claudeCode";
+  const detail = claude
+    ? "Claude Code 기본 추론 설정 사용"
+    : sent
+      ? `실제 전송: reasoning.effort = ${sent}`
+      : "reasoning 필드 생략 · 모델 기본값";
+  return (
+    <Row label="추론 강도" detail={detail}>
+      <select value={selected} disabled={view.working || choices.length < 2} onChange={(e) => api.setReasoning(e.target.value)}>
+        {choices.map((c) => (
+          <option key={c} value={c}>{EFFORT_LABELS[c] ?? c}</option>
+        ))}
+      </select>
+    </Row>
+  );
+}
+
+function InputSection({ view, save }: { view: SettingsView; save: Save }) {
+  const s = view.settings;
+  const [instructions, setInstructions] = useState(s.additionalInstructions);
+  const claude = s.billingMode === "claudeCode";
+  return (
+    <Section
+      title="선택 텍스트 입력"
+      note="선택 본문 30,000자, 추가 지시 2,000자, 그림은 PNG 한 장 10 MiB까지 보냅니다."
+    >
+      <Row
+        label="그림 영역 첨부"
+        detail={
+          claude
+            ? "그림 첨부는 OpenAI 연결에서 지원합니다"
+            : view.imageSupported
+              ? "텍스트를 읽은 뒤 첨부할 그림 영역을 직접 선택합니다"
+              : "이 모델은 이미지 입력 지원이 확인되지 않았습니다"
+        }
+      >
+        <input
+          type="checkbox"
+          className="switch"
+          checked={s.attachImage && !claude}
+          disabled={view.working || claude}
+          onChange={(e) => save({ attachImage: e.target.checked })}
+        />
+      </Row>
+      <div className="row column">
+        <div className="row-label">
+          <span>추가 지시</span>
+          <small>모든 텍스트·코드 요청 뒤에 붙습니다 (선택 사항)</small>
+        </div>
+        <textarea
+          rows={2}
+          maxLength={2000}
+          value={instructions}
+          placeholder="예: 답은 짧게, 코드는 Python으로"
+          disabled={view.working}
+          onChange={(e) => setInstructions(e.target.value)}
+          onBlur={() => instructions !== s.additionalInstructions && save({ additionalInstructions: instructions })}
+        />
+      </div>
+    </Section>
+  );
+}
+
+function PermissionSection() {
+  const [status, setStatus] = useState<{ accessibility: boolean; screenRecording: boolean } | null>(null);
+  useEffect(() => {
+    const refresh = () => api.permissionStatus().then(setStatus);
+    refresh();
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, []);
+  const badge = (ok: boolean | undefined) => (ok ? <span className="ok">● 사용 가능</span> : <span className="warn">● 접근 불가</span>);
+  return (
+    <Section
+      title="권한"
+      note="macOS가 지금 실행 중인 StudyLens에 허용한 상태입니다. 업데이트 후 스위치가 켜져 있어도 접근 불가로 보이면 목록에서 StudyLens를 지우고 다시 추가한 뒤 재실행하세요."
+    >
+      <Row label="손쉬운 사용" detail="선택 텍스트 읽기">
+        {badge(status?.accessibility)}
+        <button className="btn small" onClick={() => api.openPrivacySettings("accessibility")}>열기</button>
+      </Row>
+      <Row label="화면 기록" detail="영역 캡처·그림 첨부">
+        {badge(status?.screenRecording)}
+        <button className="btn small" onClick={() => api.openPrivacySettings("screen")}>열기</button>
+      </Row>
+    </Section>
+  );
+}
 
 function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (

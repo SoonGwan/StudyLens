@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, isMac, useResult, useSettingsView, type Block, type Hint, type ResultState } from "../lib/ipc";
+import { api, isMac, useResult, useSettingsView, type Block, type Hint, type RequestProgress, type ResultState } from "../lib/ipc";
 import { Prose } from "../lib/Prose";
 import { displayAccelerator } from "../lib/shortcut";
 
@@ -33,9 +33,17 @@ export function ResultWindow() {
         <span className={`dot ${state.status}`} />
         <h1 data-tauri-drag-region>{STATUS_TEXT[state.status]}</h1>
         {state.billingLabel && <span className="faint" data-tauri-drag-region>· {state.billingLabel}</span>}
+        <div className="spacer" data-tauri-drag-region />
+        {working && (
+          <button className="btn small" onClick={() => api.cancel()}>
+            취소
+          </button>
+        )}
       </header>
 
       <main className="content">
+        {state.progress && <ProgressLine progress={state.progress} />}
+        {state.quickCopyMessage && !working && <p className="notice">{state.quickCopyMessage}</p>}
         {state.capturedImage && <Capture src={state.capturedImage} />}
         {state.selectedText && <Selection text={state.selectedText} />}
         {state.errorMessage && <ErrorCard message={state.errorMessage} hint={state.hint} />}
@@ -91,7 +99,27 @@ function Selection({ text }: { text: string }) {
   );
 }
 
-const HINTS: Record<Hint, { label: string; action: () => void }> = {
+function ProgressLine({ progress }: { progress: RequestProgress }) {
+  const [now, setNow] = useState(Date.now());
+  const running = progress.endedAtMs === null;
+  useEffect(() => {
+    if (!running) return;
+    const timer = setInterval(() => setNow(Date.now()), 200);
+    return () => clearInterval(timer);
+  }, [running]);
+  const elapsed = ((progress.endedAtMs ?? now) - progress.startedAtMs) / 1000;
+  return (
+    <details className="progress">
+      <summary>
+        <span>{progress.stageTitle}</span>
+        <span className="faint tabular">{elapsed.toFixed(1)}초</span>
+      </summary>
+      <pre className="selectable">{progress.diagnostics}</pre>
+    </details>
+  );
+}
+
+const HINTS: Record<Exclude<Hint, "input">, { label: string; action: () => void }> = {
   accessibility: { label: "손쉬운 사용 설정 열기", action: () => api.openPrivacySettings("accessibility") },
   screenRecording: { label: "화면 기록 설정 열기", action: () => api.openPrivacySettings("screen") },
   chatGptUsage: { label: "ChatGPT 사용량 보기", action: () => api.openLink("https://chatgpt.com/settings/usage") },
@@ -103,7 +131,8 @@ function ErrorCard({ message, hint }: { message: string; hint: Hint | null }) {
   return (
     <section className="error card">
       <div className="selectable">{message}</div>
-      {hint && (
+      {hint === "input" && <div className="faint">입력·권한을 확인해 주세요. 이 오류는 로그인·사용량 문제가 아닙니다.</div>}
+      {hint && hint !== "input" && (
         <button className="btn small" onClick={HINTS[hint].action}>
           {HINTS[hint].label}
         </button>

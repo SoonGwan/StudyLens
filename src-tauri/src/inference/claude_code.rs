@@ -1,7 +1,7 @@
 //! Runs the user's own Claude Code CLI headlessly (`claude -p`), so requests use the
 //! subscription Claude Code is signed in with. StudyLens never reads Claude Code's tokens.
 
-use super::{prompts, InferenceError, InferenceProvider};
+use super::{capabilities, prompts, InferenceError, InferenceProvider};
 use async_trait::async_trait;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -33,6 +33,8 @@ pub struct ClaudeCode {
     pub executable_path: String,
     /// Empty means Claude Code's default model.
     pub model: String,
+    /// Sent after the selection as "추가 지시".
+    pub additional_instructions: String,
 }
 
 struct Output {
@@ -122,11 +124,22 @@ impl InferenceProvider for ClaudeCode {
     }
 
     async fn explain_text(&self, text: &str) -> Result<String, InferenceError> {
-        self.perform(vec![text_block(text)], prompts::INSTRUCTIONS).await
+        self.perform(self.selection_content(text)?, prompts::INSTRUCTIONS).await
     }
 
     async fn generate_code(&self, text: &str, language: &str) -> Result<String, InferenceError> {
-        self.perform(vec![text_block(text)], &prompts::code_instructions(language)).await
+        self.perform(self.selection_content(text)?, &prompts::code_instructions(language)).await
+    }
+}
+
+impl ClaudeCode {
+    fn selection_content(&self, text: &str) -> Result<Vec<Value>, InferenceError> {
+        capabilities::validate_text(text, &self.additional_instructions)?;
+        let mut content = vec![text_block(text)];
+        if !self.additional_instructions.trim().is_empty() {
+            content.push(text_block(&format!("추가 지시:\n{}", self.additional_instructions)));
+        }
+        Ok(content)
     }
 }
 
@@ -370,8 +383,10 @@ mod tests {
         )
         .unwrap();
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let claude = ClaudeCode { executable_path: script.to_string_lossy().into_owned(), model: String::new() };
+        let mut claude = ClaudeCode { executable_path: script.to_string_lossy().into_owned(), ..Default::default() };
         assert_eq!(claude.explain_text("선택한 문제").await.unwrap(), "받음");
+        claude.additional_instructions = "a".repeat(2001);
+        assert!(matches!(claude.explain_text("선택한 문제").await, Err(InferenceError::Input(_))));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

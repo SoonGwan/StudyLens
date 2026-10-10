@@ -205,3 +205,38 @@
 .empty img {
   border-radius: 16px;
 }
+
+.progress {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.progress summary {
+  display: flex;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.progress summary::-webkit-details-marker {
+  display: none;
+}
+
+.progress pre {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font: 11.5px/1.6 var(--mono);
+  white-space: pre-wrap;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.notice {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+}

@@ -54,6 +54,7 @@ fn menu(app: &AppHandle, state: &ResultState, settings: &Settings) -> tauri::Res
         Box::new(MenuItem::with_id(app, "capture", "영역 캡처해서 설명 받기", !working, Some(shortcuts.capture.as_str()))?),
         Box::new(MenuItem::with_id(app, "text", "선택한 텍스트 설명 받기", !working, Some(shortcuts.text.as_str()))?),
         Box::new(MenuItem::with_id(app, "code", "선택한 문제 → 코드 바로 복사", !working, Some(shortcuts.code.as_str()))?),
+        Box::new(MenuItem::with_id(app, "cancel", "현재 요청 취소", working, None::<&str>)?),
         Box::new(PredefinedMenuItem::separator(app)?),
         Box::new(MenuItem::with_id(app, "result", "결과 보기", has_result, None::<&str>)?),
         Box::new(MenuItem::with_id(app, "settings", "설정…", true, Some("CommandOrControl+,"))?),

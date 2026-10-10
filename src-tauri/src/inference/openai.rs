@@ -2,7 +2,7 @@
 //! or a separately billed API key.
 
 use super::sse::{EventFramer, ResponseAccumulator};
-use super::{prompts, InferenceError, InferenceProvider};
+use super::{capabilities, prompts, InferenceError, InferenceProvider, Progress, ProgressFn};
 use async_trait::async_trait;
 use base64::Engine;
 use futures_util::StreamExt;
@@ -76,44 +76,66 @@ impl OpenAIClient {
         Ok(catalogue.models.into_iter().filter(|m| m.visibility.as_deref() == Some("list")).collect())
     }
 
-    async fn respond(&self, credential: &Credential, payload: Value) -> Result<String, InferenceError> {
-        let stream = credential.kind == CredentialKind::ChatGpt;
-        let mut request = self
+    /// Both connections request a stream. A compatible transport may still answer with one
+    /// JSON body; then it must report `completed` and no SSE timings are recorded.
+    async fn respond(&self, credential: &Credential, payload: Value, progress: Option<&ProgressFn>) -> Result<String, InferenceError> {
+        let notify = |event| {
+            if let Some(progress) = progress {
+                progress(event);
+            }
+        };
+        let response = self
             .http
             .post(format!("{}/responses", self.base))
             .bearer_auth(&credential.token)
-            .timeout(Duration::from_secs(if stream { 300 } else { 120 }))
-            .json(&payload);
-        if stream {
-            request = request.header("Accept", "text/event-stream");
-        }
-        let response = request.send().await?;
+            .header("Accept", "text/event-stream")
+            .timeout(Duration::from_secs(300))
+            .json(&payload)
+            .send()
+            .await?;
         let status = response.status().as_u16();
         if !(200..300).contains(&status) {
             let body = response.bytes().await.unwrap_or_default();
             let body = &body[..body.len().min(65_536)];
             return Err(api_error(status, &serde_json::from_slice(body).unwrap_or(Value::Null)));
         }
-        if stream {
+        let is_stream = response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v.to_ascii_lowercase().contains("text/event-stream"));
+        if is_stream {
             let mut framer = EventFramer::default();
             let mut accumulator = ResponseAccumulator::default();
+            let mut reporter = ProgressReporter::default();
             let mut bytes = response.bytes_stream();
-            while let Some(chunk) = bytes.next().await {
-                for event in framer.push(&chunk?)? {
-                    if let Some(text) = accumulator.consume(&event)? {
+            let mut pending = Vec::new();
+            loop {
+                let chunk = bytes.next().await;
+                let events = match &chunk {
+                    Some(chunk) => framer.push(chunk.as_ref().map_err(|e| InferenceError::Network(e.to_string()))?)?,
+                    None => framer.finish()?.into_iter().collect(),
+                };
+                pending.extend(events);
+                for event in pending.drain(..) {
+                    reporter.observe(&event, None, &notify);
+                    let completed = accumulator.consume(&event)?;
+                    reporter.observe(&event, completed.as_deref(), &notify);
+                    if let Some(text) = completed {
                         return Ok(text);
                     }
                 }
-            }
-            if let Some(event) = framer.finish()? {
-                if let Some(text) = accumulator.consume(&event)? {
-                    return Ok(text);
+                if chunk.is_none() {
+                    return Err(InferenceError::Interrupted);
                 }
             }
-            return Err(InferenceError::Interrupted);
         }
-        let body: Value = response.json().await.map_err(|_| InferenceError::InvalidResponse)?;
-        if body["status"].as_str().is_some_and(|s| s != "completed") {
+        let body = response.bytes().await?;
+        if body.len() > 20 * 1024 * 1024 {
+            return Err(InferenceError::InvalidResponse);
+        }
+        let body: Value = serde_json::from_slice(&body).map_err(|_| InferenceError::InvalidResponse)?;
+        if body["status"] != "completed" {
             return Err(InferenceError::Interrupted);
         }
         let text = body["output"]
@@ -130,7 +152,35 @@ impl OpenAIClient {
         if text.is_empty() {
             return Err(InferenceError::EmptyOutput);
         }
+        notify(Progress::FirstText);
+        notify(Progress::Completed);
         Ok(text.to_string())
+    }
+}
+
+/// Turns stream events into first-event / first-text / completed milestones.
+#[derive(Default)]
+struct ProgressReporter {
+    saw_event: bool,
+    saw_text: bool,
+}
+
+impl ProgressReporter {
+    fn observe(&mut self, event: &str, completed: Option<&str>, notify: &impl Fn(Progress)) {
+        let Ok(value) = serde_json::from_str::<Value>(event) else { return };
+        let Some(kind) = value["type"].as_str() else { return };
+        if !self.saw_event {
+            self.saw_event = true;
+            notify(Progress::FirstEvent);
+        }
+        let delta = matches!(kind, "response.output_text.delta" | "response.refusal.delta") && value["delta"].as_str().is_some_and(|d| !d.is_empty());
+        if !self.saw_text && (delta || completed.is_some_and(|t| !t.is_empty())) {
+            self.saw_text = true;
+            notify(Progress::FirstText);
+        }
+        if completed.is_some() {
+            notify(Progress::Completed);
+        }
     }
 }
 
@@ -162,54 +212,84 @@ pub struct OpenAIProvider {
     pub client: OpenAIClient,
     pub credential: Credential,
     pub model: String,
+    /// Requested effort; only sent when the model is known to accept it.
+    pub effort: String,
+    /// Picture region attached to text and code requests.
+    pub image: Option<Vec<u8>>,
+    pub additional_instructions: String,
+    pub progress: Option<ProgressFn>,
 }
 
 impl OpenAIProvider {
-    fn payload(&self, instructions: &str, content: Value, api_key_limit: u32) -> Result<Value, InferenceError> {
-        if self.model.trim().is_empty() {
+    pub fn new(client: OpenAIClient, credential: Credential, model: String) -> Self {
+        Self { client, credential, model, effort: capabilities::MODEL_DEFAULT.into(), image: None, additional_instructions: String::new(), progress: None }
+    }
+
+    fn payload(&self, instructions: &str, content: Vec<Value>, api_key_limit: u32) -> Result<Value, InferenceError> {
+        let model = self.model.trim();
+        if model.is_empty() {
             return Err(InferenceError::InvalidModel);
         }
         let mut payload = json!({
-            "model": self.model.trim(),
+            "model": model,
             "instructions": instructions,
             "input": [{ "role": "user", "content": content }],
             "store": false,
-            "stream": self.credential.kind == CredentialKind::ChatGpt,
+            "stream": true,
         });
         if self.credential.kind == CredentialKind::ApiKey {
             payload["max_output_tokens"] = json!(api_key_limit);
         }
+        if let Some(effort) = capabilities::validated_effort(&self.effort, model) {
+            payload["reasoning"] = json!({ "effort": effort });
+        }
         Ok(payload)
     }
+
+    /// The selection, optional extra instructions, then the optional picture: one user message.
+    fn selection_content(&self, text: &str) -> Result<Vec<Value>, InferenceError> {
+        capabilities::validate_text(text, &self.additional_instructions)?;
+        let mut content = vec![json!({ "type": "input_text", "text": text })];
+        if !self.additional_instructions.trim().is_empty() {
+            content.push(json!({ "type": "input_text", "text": format!("추가 지시:\n{}", self.additional_instructions) }));
+        }
+        if let Some(image) = &self.image {
+            capabilities::validate_image(image, self.model.trim())?;
+            content.push(image_part(image));
+        }
+        Ok(content)
+    }
+}
+
+fn image_part(png: &[u8]) -> Value {
+    let url = format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png));
+    json!({ "type": "input_image", "image_url": url, "detail": "high" })
 }
 
 #[async_trait]
 impl InferenceProvider for OpenAIProvider {
     async fn explain_image(&self, png: &[u8]) -> Result<String, InferenceError> {
-        let url = format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png));
-        let content = json!([
-            { "type": "input_text", "text": prompts::IMAGE_REQUEST },
-            { "type": "input_image", "image_url": url, "detail": "high" },
-        ]);
+        capabilities::validate_image(png, self.model.trim())?;
+        let content = vec![json!({ "type": "input_text", "text": prompts::IMAGE_REQUEST }), image_part(png)];
         let payload = self.payload(prompts::INSTRUCTIONS, content, 2200)?;
-        self.client.respond(&self.credential, payload).await
+        self.client.respond(&self.credential, payload, self.progress.as_ref()).await
     }
 
     async fn explain_text(&self, text: &str) -> Result<String, InferenceError> {
-        let payload = self.payload(prompts::INSTRUCTIONS, json!([{ "type": "input_text", "text": text }]), 2200)?;
-        self.client.respond(&self.credential, payload).await
+        let payload = self.payload(prompts::INSTRUCTIONS, self.selection_content(text)?, 2200)?;
+        self.client.respond(&self.credential, payload, self.progress.as_ref()).await
     }
 
     async fn generate_code(&self, text: &str, language: &str) -> Result<String, InferenceError> {
-        let instructions = prompts::code_instructions(language);
-        let payload = self.payload(&instructions, json!([{ "type": "input_text", "text": text }]), 12_000)?;
-        self.client.respond(&self.credential, payload).await
+        let payload = self.payload(&prompts::code_instructions(language), self.selection_content(text)?, 12_000)?;
+        self.client.respond(&self.credential, payload, self.progress.as_ref()).await
     }
 }
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::inference::capabilities::InputError;
     use std::sync::{Arc, Mutex};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -255,25 +335,33 @@ pub mod tests {
     }
 
     fn provider(base: &str, kind: CredentialKind) -> OpenAIProvider {
-        OpenAIProvider {
-            client: OpenAIClient::with_base(base),
-            credential: Credential { token: "test-token".into(), kind },
-            model: "test-model".into(),
-        }
+        OpenAIProvider::new(OpenAIClient::with_base(base), Credential { token: "test-token".into(), kind }, "gpt-4.1-mini".into())
     }
 
+    fn png() -> Vec<u8> {
+        let mut png = Vec::new();
+        image::DynamicImage::new_rgba8(2, 2).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        png
+    }
+
+    const STREAM: &str = "event: x\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"단계별 \"}\n\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"설명\"}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n";
+
     #[tokio::test]
-    async fn plan_image_request_streams_until_completed_event() {
-        let events = "event: x\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"단계별 \"}\n\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"설명\"}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n";
-        let (base, seen) = mock(vec![(200, "text/event-stream", events.into())]).await;
-        let result = provider(&base, CredentialKind::ChatGpt).explain_image(&[1, 2, 3]).await.unwrap();
-        assert_eq!(result, "단계별 설명");
+    async fn plan_image_request_streams_until_completed_event_and_reports_progress() {
+        let (base, seen) = mock(vec![(200, "text/event-stream", STREAM.into())]).await;
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let mut provider = provider(&base, CredentialKind::ChatGpt);
+        let record = events.clone();
+        provider.progress = Some(Arc::new(move |e| record.lock().unwrap().push(e)));
+        let image = png();
+        assert_eq!(provider.explain_image(&image).await.unwrap(), "단계별 설명");
         let (head, payload) = seen.lock().unwrap()[0].clone();
         assert!(head.to_ascii_lowercase().contains("authorization: bearer test-token"));
         assert_eq!(payload["stream"], true);
         assert_eq!(payload["store"], false);
         assert!(payload.get("max_output_tokens").is_none());
-        assert_eq!(payload["input"][0]["content"][1]["image_url"], "data:image/png;base64,AQID");
+        assert!(payload["input"][0]["content"][1]["image_url"].as_str().unwrap().starts_with("data:image/png;base64,"));
+        assert_eq!(*events.lock().unwrap(), [Progress::FirstEvent, Progress::FirstText, Progress::Completed]);
     }
 
     #[tokio::test]
@@ -284,24 +372,67 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn api_key_mode_uses_separate_limits_and_keeps_selection_verbatim() {
+    async fn api_key_mode_streams_with_separate_limits_and_keeps_selection_verbatim() {
         let selection = "문제\n이거 Python 코드로 만들어줘";
-        let body = json!({"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"```python\nprint(1)\n```"}]}]});
-        let (base, seen) = mock(vec![(200, "application/json", body.to_string())]).await;
-        let result = provider(&base, CredentialKind::ApiKey).generate_code(selection, "Java").await.unwrap();
-        assert_eq!(result, "```python\nprint(1)\n```");
+        let (base, seen) = mock(vec![(200, "text/event-stream", STREAM.into())]).await;
+        provider(&base, CredentialKind::ApiKey).generate_code(selection, "Java").await.unwrap();
         let payload = seen.lock().unwrap()[0].1.clone();
         assert_eq!(payload["max_output_tokens"], 12000);
-        assert_eq!(payload["stream"], false);
+        assert_eq!(payload["stream"], true);
         assert_eq!(payload["instructions"], prompts::code_instructions("Java"));
         assert_eq!(payload["input"][0]["content"][0]["text"], selection);
+        assert_eq!(payload["input"][0]["content"].as_array().unwrap().len(), 1);
     }
 
     #[tokio::test]
-    async fn incomplete_api_response_cannot_return_code() {
+    async fn json_answer_to_a_stream_request_must_be_completed() {
+        let body = json!({"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"```python\nprint(1)\n```"}]}]});
+        let (base, _) = mock(vec![(200, "application/json", body.to_string())]).await;
+        assert_eq!(provider(&base, CredentialKind::ApiKey).explain_text("x").await.unwrap(), "```python\nprint(1)\n```");
         let body = json!({"status":"incomplete","output":[{"type":"message","content":[{"type":"output_text","text":"```java\nclass A {}\n```"}]}]});
         let (base, _) = mock(vec![(200, "application/json", body.to_string())]).await;
         assert_eq!(provider(&base, CredentialKind::ApiKey).explain_text("x").await.unwrap_err(), InferenceError::Interrupted);
+    }
+
+    #[tokio::test]
+    async fn reasoning_effort_is_sent_only_when_the_model_accepts_it() {
+        for (model, effort, expected) in [("gpt-5.1", "medium", Some("medium")), ("gpt-6.1-sol", "high", Some("high")), ("gpt-5.1", "modelDefault", None), ("gpt-4.1-mini", "low", None)] {
+            for kind in [CredentialKind::ChatGpt, CredentialKind::ApiKey] {
+                let (base, seen) = mock(vec![(200, "text/event-stream", STREAM.into())]).await;
+                let mut provider = provider(&base, kind);
+                provider.model = model.into();
+                provider.effort = effort.into();
+                provider.explain_text("문제").await.unwrap();
+                let payload = seen.lock().unwrap()[0].1.clone();
+                assert_eq!(payload["reasoning"]["effort"].as_str(), expected, "{model} {effort}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn selection_instructions_and_picture_form_one_user_message() {
+        let (base, seen) = mock(vec![(200, "text/event-stream", STREAM.into())]).await;
+        let mut provider = provider(&base, CredentialKind::ChatGpt);
+        provider.additional_instructions = "Java로".into();
+        provider.image = Some(png());
+        provider.explain_text("문제 ex1.png").await.unwrap();
+        let content = seen.lock().unwrap()[0].1["input"][0]["content"].clone();
+        assert_eq!(content[0]["text"], "문제 ex1.png");
+        assert_eq!(content[1]["text"], "추가 지시:\nJava로");
+        assert_eq!(content[2]["type"], "input_image");
+    }
+
+    #[tokio::test]
+    async fn invalid_inputs_are_blocked_before_the_network() {
+        let unreachable = "http://127.0.0.1:9";
+        let mut unknown = provider(unreachable, CredentialKind::ApiKey);
+        unknown.model = "custom-model".into();
+        unknown.image = Some(png());
+        assert!(matches!(unknown.explain_text("문제").await, Err(InferenceError::Input(InputError::UnsupportedImageModel))));
+        let mut long = provider(unreachable, CredentialKind::ApiKey);
+        long.additional_instructions = "a".repeat(2001);
+        assert!(matches!(long.explain_text("문제").await, Err(InferenceError::Input(InputError::InstructionsTooLong))));
+        assert!(matches!(provider(unreachable, CredentialKind::ApiKey).explain_image(b"nope").await, Err(InferenceError::Input(InputError::InvalidImage))));
     }
 
     #[tokio::test]

@@ -1,15 +1,9 @@
 //! Global shortcuts. Each must include Command/Ctrl, Option/Alt or Control.
 
+use crate::core::Action;
 use crate::settings::Shortcuts;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
-
-#[derive(Clone, Copy)]
-pub enum Action {
-    Capture,
-    Text,
-    Code,
-}
 
 pub fn plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
     tauri_plugin_global_shortcut::Builder::new()

@@ -4,12 +4,12 @@
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
-pub use macos::{capture_region, SelectionReader};
+pub use macos::{capture_region, permission_status, SelectionReader};
 
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
-pub use self::windows::{capture_region, finish_overlay, overlay_image, SelectionReader};
+pub use self::windows::{capture_region, finish_overlay, overlay_image, permission_status, SelectionReader};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CaptureError {

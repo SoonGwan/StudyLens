@@ -5,6 +5,7 @@ mod document;
 mod hotkeys;
 mod inference;
 mod platform;
+mod progress;
 mod quick_code;
 mod secrets;
 mod settings;
@@ -26,6 +27,9 @@ pub fn run() {
             commands::get_result,
             commands::get_settings,
             commands::start,
+            commands::cancel_request,
+            commands::set_reasoning,
+            commands::permission_status,
             commands::copy_explanation,
             commands::copy_code,
             commands::save_settings,

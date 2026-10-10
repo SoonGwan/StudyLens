@@ -93,7 +93,7 @@ static PENDING: Mutex<Option<Pending>> = Mutex::new(None);
 
 /// Freezes the primary monitor, lets the user drag a region on a full-screen overlay and
 /// crops the frozen image. Esc or a click without dragging cancels.
-pub async fn capture_region(app: &tauri::AppHandle) -> Result<Vec<u8>, CaptureError> {
+pub async fn capture_region(app: &tauri::AppHandle, _prompt: bool) -> Result<Vec<u8>, CaptureError> {
     let failed = |e: String| CaptureError::LaunchFailed(e);
     let monitors = xcap::Monitor::all().map_err(|e| failed(e.to_string()))?;
     let monitor = monitors.into_iter().find(|m| m.is_primary().unwrap_or(false)).ok_or(CaptureError::Empty)?;
@@ -141,6 +141,11 @@ pub async fn capture_region(app: &tauri::AppHandle) -> Result<Vec<u8>, CaptureEr
         .write_to(&mut Cursor::new(&mut out), image::ImageFormat::Png)
         .map_err(|_| CaptureError::Empty)?;
     Ok(out)
+}
+
+/// Windows has no per-app screen or accessibility permission to report.
+pub fn permission_status() -> Option<(bool, bool)> {
+    None
 }
 
 pub fn overlay_image() -> Option<String> {
