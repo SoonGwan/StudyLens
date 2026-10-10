@@ -1,0 +1,156 @@
+//! IPC commands for the windows, plus tray and shortcut dispatch.
+
+use crate::core::{Core, ResultState, SettingsView};
+use crate::hotkeys::Action;
+use crate::settings::Settings;
+use crate::ui;
+use std::sync::Arc;
+use tauri::{AppHandle, Manager, State};
+
+type CoreState<'a> = State<'a, Arc<Core>>;
+
+pub fn run(app: &AppHandle, action: Action) {
+    let core = app.state::<Arc<Core>>().inner().clone();
+    tauri::async_runtime::spawn(async move {
+        match action {
+            Action::Capture => core.capture_and_analyze().await,
+            Action::Text => core.analyze_selected_text().await,
+            Action::Code => core.copy_selected_code().await,
+        }
+    });
+}
+
+pub fn menu_action(app: &AppHandle, id: &str) {
+    match id {
+        "capture" => run(app, Action::Capture),
+        "text" => run(app, Action::Text),
+        "code" => run(app, Action::Code),
+        "result" => ui::show_result(app),
+        "settings" => ui::show_settings(app),
+        "quit" => app.exit(0),
+        _ => {}
+    }
+}
+
+#[tauri::command]
+pub fn get_result(core: CoreState) -> ResultState {
+    core.result()
+}
+
+#[tauri::command]
+pub fn get_settings(core: CoreState) -> SettingsView {
+    core.settings_view()
+}
+
+#[tauri::command]
+pub fn start(app: AppHandle, action: String) {
+    let action = match action.as_str() {
+        "capture" => Action::Capture,
+        "text" => Action::Text,
+        _ => Action::Code,
+    };
+    run(&app, action);
+}
+
+#[tauri::command]
+pub fn copy_explanation(core: CoreState) {
+    core.copy_explanation();
+}
+
+#[tauri::command]
+pub fn copy_code(core: CoreState, id: usize) {
+    core.copy_code(id);
+}
+
+#[tauri::command]
+pub fn save_settings(core: CoreState, settings: Settings) -> Result<(), String> {
+    core.save_settings(settings)
+}
+
+#[tauri::command]
+pub fn save_api_key(core: CoreState, key: String) -> Result<(), String> {
+    core.save_api_key(&key)
+}
+
+#[tauri::command]
+pub async fn chatgpt_sign_in(core: CoreState<'_>, new_account: bool, request_consent: bool) -> Result<(), ()> {
+    core.chatgpt_sign_in(new_account, request_consent).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn chatgpt_cancel(core: CoreState) {
+    core.chatgpt_cancel();
+}
+
+#[tauri::command]
+pub async fn chatgpt_select(core: CoreState<'_>, client_id: String) -> Result<(), ()> {
+    core.chatgpt_select(&client_id).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn chatgpt_refresh_models(core: CoreState<'_>) -> Result<(), ()> {
+    core.chatgpt_refresh_models().await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn chatgpt_sign_out(core: CoreState<'_>) -> Result<(), ()> {
+    core.chatgpt_sign_out().await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn claude_refresh_status(core: CoreState<'_>) -> Result<(), ()> {
+    core.claude_refresh_status().await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn claude_sign_in(core: CoreState<'_>) -> Result<(), ()> {
+    core.claude_sign_in().await;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn claude_cancel(core: CoreState) {
+    core.claude_cancel();
+}
+
+#[tauri::command]
+pub fn open_link(app: AppHandle, url: String) -> Result<(), String> {
+    ui::open_url(&app, &url)
+}
+
+#[tauri::command]
+pub fn open_privacy_settings(app: AppHandle, kind: String) -> Result<(), String> {
+    let url = crate::platform::privacy_settings_url(&kind).ok_or("이 OS에는 해당 설정이 없습니다.")?;
+    ui::open_url(&app, url)
+}
+
+#[tauri::command]
+pub fn open_settings(app: AppHandle) {
+    ui::show_settings(&app);
+}
+
+#[tauri::command]
+pub fn hide_window(window: tauri::WebviewWindow) {
+    let _ = window.hide();
+}
+
+#[tauri::command]
+pub fn overlay_image() -> Option<String> {
+    #[cfg(windows)]
+    return crate::platform::overlay_image();
+    #[cfg(not(windows))]
+    None
+}
+
+#[tauri::command]
+pub fn overlay_finish(rect: Option<serde_json::Value>) {
+    #[cfg(windows)]
+    crate::platform::finish_overlay(rect.and_then(|r| serde_json::from_value(r).ok()));
+    #[cfg(not(windows))]
+    let _ = rect;
+}

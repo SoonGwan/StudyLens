@@ -1,6 +1,8 @@
 //! Secrets live in the OS credential store (macOS Keychain, Windows Credential Manager).
 
+#[cfg(test)]
 use std::collections::HashMap;
+#[cfg(test)]
 use std::sync::Mutex;
 
 const SERVICE: &str = "com.studylens.app";
@@ -42,9 +44,11 @@ fn message(error: keyring::Error) -> String {
     format!("보안 저장소 오류: {error}")
 }
 
+#[cfg(test)]
 #[derive(Default)]
 pub struct MemoryStore(Mutex<HashMap<String, String>>);
 
+#[cfg(test)]
 impl SecretStore for MemoryStore {
     fn load(&self, account: &str) -> Result<Option<String>, String> {
         Ok(self.0.lock().unwrap().get(account).cloned())

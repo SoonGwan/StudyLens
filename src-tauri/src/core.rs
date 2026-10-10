@@ -74,7 +74,7 @@ pub struct ConnectionState {
     pub claude_status: Option<ClaudeStatus>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsView {
     pub settings: Settings,
