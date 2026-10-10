@@ -155,7 +155,9 @@ swift build -c release
 - `StudyLensApp.swift`: SwiftUI 메뉴바 앱 및 결과/설정 창
 - `AppModel.swift`: 캡처 → 분석 → 확인 → 복사 상태 흐름
 - `ScreenCaptureService.swift`: macOS 대화형 영역 선택 캡처
-- `OpenAIService.swift`: Responses API 이미지 분석
+- `InferenceProvider.swift`: 백엔드 공통 인터페이스(`InferenceProvider`)와 공용 프롬프트(`StudyPrompt`)
+- `OpenAIService.swift`: Responses API 이미지 분석 (`OpenAIProvider`로 연결)
+- `ClaudeCodeService.swift`: 로컬 Claude Code CLI 실행 (`InferenceProvider` 구현)
 - `ChatGPTAuthService.swift`: 공식 ChatGPT 로그인, 계정 선택, 토큰 갱신과 로그아웃
 - `OAuthLoopbackServer.swift`: 로그인 중에만 열리는 로컬 콜백
 - `OIDCIdentity.swift`: 로그인 서명과 계정 정보 검증

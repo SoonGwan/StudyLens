@@ -37,37 +37,34 @@ struct ClaudeCodeStatus: Decodable, Equatable {
 
 /// Runs the user's own Claude Code CLI in headless print mode, so requests use the
 /// subscription Claude Code is signed in with. StudyLens never reads Claude Code's tokens.
-struct ClaudeCodeService {
+struct ClaudeCodeService: InferenceProvider {
     static let models: [(id: String, title: String)] = [
         ("", "Claude Code 기본값"), ("opus", "Opus"), ("sonnet", "Sonnet"), ("haiku", "Haiku")
     ]
 
-    func explain(imageData: Data, executablePath: String, model: String) async throws -> String {
-        try await perform(
-            content: [
-                Self.imageBlock(imageData),
-                Self.textBlock("화면 이미지의 내용과 사용자의 요청을 읽고 요청에 맞게 답해 주세요. 별도의 요청이 없으면 문제의 답과 풀이를 한국어로 제공해 주세요.")
-            ],
-            systemPrompt: OpenAIService.instructions,
-            executablePath: executablePath,
-            model: model
-        )
+    /// Empty values mean "find claude automatically" and "use Claude Code's default model".
+    var executablePath = ""
+    var model = ""
+
+    func explain(imageData: Data) async throws -> String {
+        try await perform(content: [Self.imageBlock(imageData), Self.textBlock(StudyPrompt.imageRequest)], systemPrompt: StudyPrompt.instructions)
     }
 
-    func explain(selectedText: String, executablePath: String, model: String) async throws -> String {
-        try await perform(content: [Self.textBlock(selectedText)], systemPrompt: OpenAIService.instructions, executablePath: executablePath, model: model)
+    func explain(selectedText: String) async throws -> String {
+        try await perform(content: [Self.textBlock(selectedText)], systemPrompt: StudyPrompt.instructions)
     }
 
-    func generateCode(selectedText: String, language: String, executablePath: String, model: String) async throws -> String {
-        try await perform(
-            content: [Self.textBlock(selectedText)],
-            systemPrompt: OpenAIService.codeInstructions(language: language),
-            executablePath: executablePath,
-            model: model
-        )
+    func generateCode(selectedText: String, language: String) async throws -> String {
+        try await perform(content: [Self.textBlock(selectedText)], systemPrompt: StudyPrompt.codeInstructions(language: language))
     }
 
-    func status(executablePath: String) async throws -> ClaudeCodeStatus {
+    /// Fails fast before a capture starts. The first lookup may ask the login shell, so keep it off the main actor.
+    func checkInstalled() async throws {
+        let path = executablePath
+        _ = try await Task.detached { try Self.locateExecutable(override: path) }.value
+    }
+
+    func status() async throws -> ClaudeCodeStatus {
         let executable = try Self.locateExecutable(override: executablePath)
         let output = try await ProcessRunner.run(executable, arguments: ["auth", "status", "--json"], timeout: 30)
         guard let status = try? JSONDecoder().decode(ClaudeCodeStatus.self, from: output.stdout) else {
@@ -77,7 +74,7 @@ struct ClaudeCodeService {
     }
 
     /// Claude Code opens the browser and handles the sign-in itself.
-    func login(executablePath: String) async throws {
+    func login() async throws {
         let executable = try Self.locateExecutable(override: executablePath)
         let output = try await ProcessRunner.run(executable, arguments: ["auth", "login", "--claudeai"], timeout: 600)
         guard output.status == 0 else {
@@ -85,7 +82,7 @@ struct ClaudeCodeService {
         }
     }
 
-    private func perform(content: [[String: Any]], systemPrompt: String, executablePath: String, model: String) async throws -> String {
+    private func perform(content: [[String: Any]], systemPrompt: String) async throws -> String {
         let executable = try Self.locateExecutable(override: executablePath)
         let output = try await ProcessRunner.run(
             executable,

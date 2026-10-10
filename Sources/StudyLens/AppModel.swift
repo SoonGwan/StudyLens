@@ -99,7 +99,6 @@ final class AppModel: ObservableObject {
     private let captureService = ScreenCaptureService()
     private let selectedTextService = SelectedTextService()
     private let openAIService = OpenAIService()
-    private let claudeCodeService = ClaudeCodeService()
     private var claudeLoginTask: Task<Void, Error>?
     private var started = false
 
@@ -154,7 +153,7 @@ final class AppModel: ObservableObject {
 
         do {
             status = .selecting
-            let route = try await inferenceRoute()
+            let provider = try await inferenceProvider()
             resultBillingLabel = billingLabel
             let capture = try await captureService.captureInteractiveRegion()
             capturedImage = NSImage(data: capture)
@@ -162,7 +161,7 @@ final class AppModel: ObservableObject {
             status = .analyzing
             NotificationCenter.default.post(name: .studyLensOpenResult, object: nil)
 
-            explanation = try await explain(imageData: capture, route: route)
+            explanation = try await provider.explain(imageData: capture)
             status = .ready
         } catch is CancellationError {
             status = .idle
@@ -194,10 +193,10 @@ final class AppModel: ObservableObject {
             selectedText = text
             capturedImage = nil
             status = .analyzing
-            let route = try await inferenceRoute()
+            let provider = try await inferenceProvider()
             resultBillingLabel = billingLabel
             NotificationCenter.default.post(name: .studyLensOpenResult, object: nil)
-            explanation = try await explain(selectedText: text, route: route)
+            explanation = try await provider.explain(selectedText: text)
             status = .ready
         } catch {
             hasSelectionError = error is SelectedTextError
@@ -222,9 +221,9 @@ final class AppModel: ObservableObject {
         let workflow = injectedWorkflow ?? QuickCodeCopy(
             readSelection: { [selectedTextService] in try await selectedTextService.readSelectedText(promptForPermission: false) },
             generate: { [self] text in
-                let route = try await inferenceRoute()
+                let provider = try await inferenceProvider()
                 resultBillingLabel = billingLabel
-                return try await generateCode(selectedText: text, language: language, route: route)
+                return try await provider.generateCode(selectedText: text, language: language)
             }
         )
         do {
@@ -297,42 +296,18 @@ final class AppModel: ObservableObject {
         (billingMode == .chatGPT ? chatGPTModelName : modelName).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private enum InferenceRoute {
-        case openAI(InferenceCredential)
-        case claudeCode
+    private var claudeCode: ClaudeCodeService {
+        ClaudeCodeService(executablePath: claudeExecutablePath, model: claudeModelName)
     }
 
-    private func inferenceRoute() async throws -> InferenceRoute {
-        guard billingMode == .claudeCode else { return .openAI(try await inferenceCredential()) }
-        let path = claudeExecutablePath
-        _ = try await Task.detached { try ClaudeCodeService.locateExecutable(override: path) }.value
-        return .claudeCode
-    }
-
-    private func explain(imageData: Data, route: InferenceRoute) async throws -> String {
-        switch route {
-        case .openAI(let credential):
-            return try await openAIService.explain(imageData: imageData, credential: credential, model: currentModelName)
+    private func inferenceProvider() async throws -> any InferenceProvider {
+        switch billingMode {
         case .claudeCode:
-            return try await claudeCodeService.explain(imageData: imageData, executablePath: claudeExecutablePath, model: claudeModelName)
-        }
-    }
-
-    private func explain(selectedText: String, route: InferenceRoute) async throws -> String {
-        switch route {
-        case .openAI(let credential):
-            return try await openAIService.explain(selectedText: selectedText, credential: credential, model: currentModelName)
-        case .claudeCode:
-            return try await claudeCodeService.explain(selectedText: selectedText, executablePath: claudeExecutablePath, model: claudeModelName)
-        }
-    }
-
-    private func generateCode(selectedText: String, language: String, route: InferenceRoute) async throws -> String {
-        switch route {
-        case .openAI(let credential):
-            return try await openAIService.generateCode(selectedText: selectedText, language: language, credential: credential, model: currentModelName)
-        case .claudeCode:
-            return try await claudeCodeService.generateCode(selectedText: selectedText, language: language, executablePath: claudeExecutablePath, model: claudeModelName)
+            let provider = claudeCode
+            try await provider.checkInstalled()
+            return provider
+        case .chatGPT, .apiKey:
+            return OpenAIProvider(service: openAIService, credential: try await inferenceCredential(), model: currentModelName)
         }
     }
 
@@ -422,7 +397,7 @@ final class AppModel: ObservableObject {
         connectionBusy = true
         defer { connectionBusy = false }
         do {
-            claudeStatus = try await claudeCodeService.status(executablePath: claudeExecutablePath)
+            claudeStatus = try await claudeCode.status()
             connectionMessage = claudeStatus?.loggedIn == true ? nil : ClaudeCodeError.notLoggedIn.localizedDescription
         } catch {
             claudeStatus = nil
@@ -434,8 +409,8 @@ final class AppModel: ObservableObject {
         guard !connectionBusy, !isWorking else { return }
         connectionBusy = true
         connectionMessage = "브라우저에서 Claude 로그인을 완료해 주세요. Claude Code가 로그인을 처리합니다."
-        let path = claudeExecutablePath
-        let task = Task { [claudeCodeService] in try await claudeCodeService.login(executablePath: path) }
+        let provider = claudeCode
+        let task = Task { try await provider.login() }
         claudeLoginTask = task
         do {
             try await task.value

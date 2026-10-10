@@ -71,7 +71,7 @@ final class ClaudeCodeServiceTests: XCTestCase {
         """.write(to: script, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
 
-        let result = try await ClaudeCodeService().explain(selectedText: "선택한 문제", executablePath: script.path, model: "")
+        let result = try await ClaudeCodeService(executablePath: script.path).explain(selectedText: "선택한 문제")
         XCTAssertEqual(result, "받음")
     }
 
