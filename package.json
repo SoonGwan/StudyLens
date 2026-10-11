@@ -1,0 +1,33 @@
+{
+  "name": "studylens",
+  "private": true,
+  "version": "0.3.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "build:helper": "bun scripts/build-helper.mjs",
+    "tauri": "tauri",
+    "app:dev": "bun run build:helper && tauri dev",
+    "app:build": "bun run build:helper && tauri build",
+    "test": "vitest run && cargo test --manifest-path src-tauri/Cargo.toml && swift test --package-path native && bun run test:helper",
+    "test:helper": "bun run build:helper && bun scripts/test-helper.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.2",
+    "@tauri-apps/plugin-opener": "^2.7.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.1",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
+  }
+}

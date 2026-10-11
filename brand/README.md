@@ -35,10 +35,11 @@ live in `landing/style.css`.
   [imagegen-prompt.json](imagegen-prompt.json).
 - `landing/assets/lens-poses.webp`: delivery encoding of the complete sheet.
   CSS shows individual grid cells without repainting the artwork. Preserve alpha.
-- `app-result.png`: rendered from the repository's real `ResultView`, using
-  [result-example.txt](result-example.txt). This is an authored, fixed teaching
-  example, not a live model response or a screen recording. The renderer creates
-  an offscreen hosting view without accessing a user's screen or sending a request.
+- `app-result.png`: rendered from the app's real result window (`src/result/`,
+  built with `bun run build`) using [result-example.txt](result-example.txt). This is
+  an authored, fixed teaching example, not a live model response or a screen
+  recording. The renderer stubs the app's IPC in headless Chrome; it does not access
+  a user's screen or send a request.
 - `landing/assets/app-result.webp`: delivery encoding of that result view.
 - `og-source.html`: editable 1200 × 630 sharing-card source; delivery image is
   `landing/assets/og-ko.png`.
@@ -48,11 +49,12 @@ live in `landing/style.css`.
 Regenerate locally on macOS:
 
 ```sh
-npm ci --prefix tools/landing
-python3 -B scripts/render_app_result.py
-node scripts/render_landing_assets.cjs
+bun install --cwd tools/landing
+bun install && bun run build
+bun scripts/render_app_result.cjs
+bun scripts/render_landing_assets.cjs
 ```
 
-The renderer needs Swift and an installed Chrome. For a different Chrome path,
-set `STUDYLENS_CHROME_PATH`. Ordinary static builds need only Python, with no Node,
-Swift, image service, font CDN, or runtime package dependency.
+The renderers need Bun and an installed Chrome. For a different Chrome path,
+set `STUDYLENS_CHROME_PATH`. Ordinary static builds need only Python, with no Bun,
+image service, font CDN, or runtime package dependency.

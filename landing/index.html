@@ -47,7 +47,7 @@
           <figcaption><span>이름: 렌즈</span><span>특기: 막힌 부분 들여다보기</span></figcaption>
         </figure>
       </div>
-      <div class="hero-foot"><span>macOS 13+ <span class="dot">·</span> 소스 빌드 __APP_VERSION__</span><span>Windows 준비 중 <span class="dot">·</span> <a href="https://github.com/SoonGwan/StudyLens/pull/9">Tauri 전환 현황 ↗</a></span><a href="#features">아래로 조금 더 <span aria-hidden="true">↓</span></a></div>
+      <div class="hero-foot"><span>macOS 13+ <span class="dot">·</span> 소스 빌드 __APP_VERSION__</span><span>Windows 실기기 검증 전 <span class="dot">·</span> <a href="https://github.com/SoonGwan/StudyLens/pull/9">Tauri 전환 기록 ↗</a></span><a href="#features">아래로 조금 더 <span aria-hidden="true">↓</span></a></div>
     </section>
 
     <section class="wrap section" id="features" aria-labelledby="features-title">
@@ -90,18 +90,19 @@
             <div class="desktop-footer"><span id="demo-caption">화면은 기능 설명을 위한 재구성입니다.</span><span>실제 요청 없음</span></div>
           </div>
         </div>
-        <figure class="app-proof"><img src="assets/app-result.webp" width="1440" height="1560" alt="StudyLens __APP_VERSION__ 실제 SwiftUI 결과 화면: 학습 설명, 이진 탐색 코드, 전체 복사와 코드만 복사 버튼" loading="lazy"><figcaption><span>실제 앱 결과 화면 · macOS __APP_VERSION__</span><p>앱의 SwiftUI 화면을 저장된 예시로 렌더링했습니다.<br>이 예시에는 AI 요청을 사용하지 않았습니다.</p><a href="https://github.com/SoonGwan/StudyLens/blob/main/Sources/StudyLens/Views/ResultView.swift">화면 구현 보기 ↗</a></figcaption></figure>
+        <figure class="app-proof"><img src="assets/app-result.webp" width="1440" height="1560" alt="StudyLens __APP_VERSION__ 실제 결과 창: 학습 설명, 이진 탐색 코드, 전체 복사와 코드만 복사 버튼" loading="lazy"><figcaption><span>실제 앱 결과 화면 · macOS __APP_VERSION__</span><p>앱의 결과 창을 저장된 예시로 렌더링했습니다.<br>이 예시에는 AI 요청을 사용하지 않았습니다.</p><a href="https://github.com/SoonGwan/StudyLens/blob/main/src/result/ResultWindow.tsx">화면 구현 보기 ↗</a></figcaption></figure>
       </div>
     </section>
 
     <section class="wrap section install-section" id="install" aria-labelledby="install-title">
       <div class="section-label"><span>03 / 시작하기</span><span>지금은 소스에서 설치합니다.</span></div>
-      <div class="section-heading"><h2 id="install-title">메뉴바에<br>작은 동료 하나.</h2><p>macOS 13 이상, Xcode 15 이상 또는<br>해당 Command Line Tools가 필요합니다.<br>현재 공개 바이너리 릴리스는 없습니다.</p></div>
-      <div class="install-layout"><div><div class="platform-row"><strong>macOS</strong><span>소스 빌드 __APP_VERSION__ <span aria-hidden="true">↗</span></span></div><div class="platform-row pending"><strong>Windows</strong><span>준비 중</span></div><p class="install-note">Tauri 전환과 Windows 지원은 <a href="https://github.com/SoonGwan/StudyLens/pull/9">#9에서 작업 중</a>입니다. Windows 빌드·실기기 검증·배포는 아직 완료되지 않았습니다.</p><a class="text-link" href="https://github.com/SoonGwan/StudyLens#앱-번들-만들기-및-설치">자세한 설치 문서 <span aria-hidden="true">↗</span></a></div><div class="install-terminal"><div class="terminal-head"><span>TERMINAL</span><button id="copy-install" type="button">명령 복사</button></div><pre tabindex="0" aria-label="소스 설치 명령"><code id="install-command">git clone https://github.com/SoonGwan/StudyLens.git
+      <div class="section-heading"><h2 id="install-title">메뉴바에<br>작은 동료 하나.</h2><p>macOS 13 이상, Bun, Rust,<br>Xcode Command Line Tools가 필요합니다.<br>현재 공개 바이너리 릴리스는 없습니다.</p></div>
+      <div class="install-layout"><div><div class="platform-row"><strong>macOS</strong><span>소스 빌드 __APP_VERSION__ <span aria-hidden="true">↗</span></span></div><div class="platform-row pending"><strong>Windows</strong><span>실기기 검증 전</span></div><p class="install-note">앱은 Tauri로 macOS와 Windows를 함께 지원하도록 만들어졌습니다. Windows는 컴파일만 확인했고 실기기 검증·배포는 아직 완료되지 않았습니다.</p><a class="text-link" href="https://github.com/SoonGwan/StudyLens#설치">자세한 설치 문서 <span aria-hidden="true">↗</span></a></div><div class="install-terminal"><div class="terminal-head"><span>TERMINAL</span><button id="copy-install" type="button">명령 복사</button></div><pre tabindex="0" aria-label="소스 설치 명령"><code id="install-command">git clone https://github.com/SoonGwan/StudyLens.git
 cd StudyLens
-./build-app.sh
-open .build</code></pre><p>생성된 StudyLens.app을 응용 프로그램 폴더로 옮기세요.</p><span id="install-copy-status" role="status" aria-live="polite"></span></div></div>
-      <ol class="setup-steps"><li><span>01</span><h3>앱 실행</h3><p>처음 실행 시 개발자 확인 경고가 뜨면 Control-클릭 → 열기를 선택하세요.</p></li><li><span>02</span><h3>연결 선택</h3><p>메뉴바 아이콘을 ⌥-클릭하고 설정에서 ChatGPT, API 키, Claude Code 중 선택하세요.</p></li><li><span>03</span><h3>권한 허용</h3><p>텍스트는 손쉬운 사용, 캡처는 화면 기록 권한이 필요합니다. 변경 후 앱을 다시 실행하세요.</p></li></ol>
+bun install
+bun run app:build
+open src-tauri/target/release/bundle/dmg</code></pre><p>.dmg를 열고 StudyLens를 응용 프로그램 폴더로 옮기세요.</p><span id="install-copy-status" role="status" aria-live="polite"></span></div></div>
+      <ol class="setup-steps"><li><span>01</span><h3>앱 실행</h3><p>처음 실행 시 개발자 확인 경고가 뜨면 Control-클릭 → 열기를 선택하세요.</p></li><li><span>02</span><h3>연결 선택</h3><p>처음 실행하면 설정 창이 열립니다. Claude Code, ChatGPT, API 키 중 선택하세요. 이후에는 메뉴바의 점 아이콘에서 엽니다.</p></li><li><span>03</span><h3>권한 허용</h3><p>텍스트는 손쉬운 사용, 캡처는 화면 기록 권한이 필요합니다. 변경 후 앱을 다시 실행하세요.</p></li></ol>
     </section>
 
     <section class="wrap section connection-section" id="connections" aria-labelledby="connections-title">
@@ -117,7 +118,7 @@ open .build</code></pre><p>생성된 StudyLens.app을 응용 프로그램 폴더
       <details><summary>그림과 텍스트를 함께 보낼 수 있나요?<span aria-hidden="true">+</span></summary><p>현재 OpenAI 연결에서는 설정 → 선택 텍스트 입력에서 그림 첨부를 켤 수 있습니다. 텍스트를 읽은 뒤 직접 선택한 그림 영역 한 장을 함께 보냅니다. 기본값은 꺼짐이며 Claude 연결에서는 이 옵션을 지원하지 않습니다.</p></details>
       <details><summary>코드는 자동으로 붙여넣나요?<span aria-hidden="true">+</span></summary><p>코드 바로 복사만 성공 시 코드 하나를 자동 복사합니다. 일반 설명은 결과 창에서 직접 복사합니다. 붙여넣기와 입력은 직접 하며, 코드가 없거나 복사 대상을 확정할 수 없으면 기존 클립보드를 유지합니다.</p></details>
       <details><summary>어떤 앱에서나 동작하나요?<span aria-hidden="true">+</span></summary><p>일부 앱과 보안 입력 영역은 선택 텍스트를 제공하지 않을 수 있습니다. 이때는 영역 캡처를 사용하세요. 단축키 충돌은 설정에서 변경할 수 있습니다. AI 설명과 코드는 직접 검토해야 하며, 진행 중인 시험·감독 환경에서는 정답 대신 개념 복습을 제공하도록 설계되어 있습니다.</p></details>
-      <details><summary>Windows 다운로드는 언제 나오나요?<span aria-hidden="true">+</span></summary><p>현재는 macOS SwiftUI 앱을 소스에서 빌드합니다. macOS·Windows용 Tauri 전환은 진행 중이고 공개 바이너리 릴리스와 출시 일정은 아직 없습니다. <a href="https://github.com/SoonGwan/StudyLens/pull/9">전환 현황 ↗</a> · <a href="https://github.com/SoonGwan/StudyLens/releases">릴리스 확인 ↗</a></p></details>
+      <details><summary>Windows 다운로드는 언제 나오나요?<span aria-hidden="true">+</span></summary><p>앱은 Tauri로 macOS와 Windows를 함께 지원하도록 만들어졌습니다. 지금은 macOS에서 소스로 빌드하며, Windows는 컴파일만 확인했고 실기기 검증·공개 릴리스·출시 일정은 아직 없습니다. <a href="https://github.com/SoonGwan/StudyLens/pull/9">전환 현황 ↗</a> · <a href="https://github.com/SoonGwan/StudyLens/releases">릴리스 확인 ↗</a></p></details>
     </div></section>
     <section class="wrap final-cta"><span class="section-label">혼자 공부해도, 혼자 막힐 필요는 없으니까.</span><h2>자, 막힌 데부터<span>.</span></h2><div class="actions"><a class="button primary" href="#install">StudyLens 시작하기 <span aria-hidden="true">↗</span></a><a class="text-link" href="https://github.com/SoonGwan/StudyLens">소스 구경하기 ↗</a></div></section>
   </main>

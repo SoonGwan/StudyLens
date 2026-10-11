@@ -3,7 +3,6 @@
 import argparse
 import json
 from pathlib import Path
-import plistlib
 import shutil
 import subprocess
 from urllib.parse import urlsplit
@@ -25,7 +24,7 @@ def main():
     if output == REPO or REPO.is_relative_to(output) or (output.is_relative_to(REPO) and not output.is_relative_to(REPO / '.build')):
         parser.error('output must not overwrite repository source')
     output.mkdir(parents=True, exist_ok=True)
-    version = plistlib.loads((REPO / 'AppBundle/Info.plist').read_bytes())['CFBundleShortVersionString']
+    version = json.loads((REPO / 'src-tauri/tauri.conf.json').read_text())['version']
     source = REPO / 'landing'
     html = (source / 'index.html').read_text().replace('__SITE_URL__', escape(url, {'"': '&quot;'})).replace('__APP_VERSION__', version)
     if '__SITE_URL__' in html or '__APP_VERSION__' in html:
