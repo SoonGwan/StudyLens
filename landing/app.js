@@ -26,6 +26,15 @@ const modes = {
     heading: '이진 탐색 구현하기', intro: '원하는 코드 언어도 함께 알려주세요.',
     input: '정렬된 배열에서 원하는 값을 찾는\n이진 탐색을 Python 코드로 만들어줘.', shortcut: '⌘ ⇧ 8',
     response: '붙여넣은 코드 예시 · 입력 배열은 정렬되어 있어야 합니다.'
+  },
+  captureCode: {
+    titles: ['단축키 누르기', '문제 영역 선택', '코드 자동 복사', '직접 붙여넣기'],
+    copies: ['⌘ ⇧ 7로 캡처 → 코드를 시작합니다.', '문제와 조건이 보이는 영역만 드래그합니다.', '결과 창 없이 코드만 클립보드로 받습니다.', '직접 ⌘V로 붙여넣고 검토합니다.'],
+    actions: ['⌘ ⇧ 7 누르기', '문제 영역 선택하기', '복사 흐름 보기', '붙여넣기 흐름 보기', '처음부터 보기'],
+    statuses: ['텍스트 선택 없이 단축키부터 시작합니다.', '앱에서는 문제 영역만 드래그해 캡처합니다.', '선택한 이미지 한 장으로 코드를 요청합니다.', '성공 시 코드만 자동 복사합니다. 이 데모는 클립보드를 변경하지 않습니다.', '앱에서는 직접 ⌘V로 붙여넣습니다. 아래는 고정된 코드 예시입니다.'],
+    heading: '그림 문제에서 코드까지', intro: '복사하기 어려운 문제도 영역만 선택하세요.',
+    input: '정렬된 배열에서 원하는 값을 찾는\n이진 탐색을 Python 코드로 만들어줘.', shortcut: '⌘ ⇧ 7',
+    response: '붙여넣은 코드 예시 · 입력 배열은 정렬되어 있어야 합니다.'
   }
 };
 const $ = id => document.getElementById(id);
@@ -33,9 +42,11 @@ let currentMode = 'text';
 let step = 0;
 let copySequence = 0;
 let installSequence = 0;
+const copiesCode = () => currentMode === 'code' || currentMode === 'captureCode';
 
 function render() {
   const data = modes[currentMode];
+  const capture = currentMode === 'image' || currentMode === 'captureCode';
   document.querySelectorAll('[data-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === currentMode)));
   document.querySelectorAll('.demo-steps li').forEach((item, index) => {
     if (index === Math.min(step, 3)) item.setAttribute('aria-current', 'step');
@@ -55,14 +66,14 @@ function render() {
   $('example-input').style.whiteSpace = 'pre-line';
   $('example-response').textContent = data.response;
   $('shortcut-hint').textContent = data.shortcut;
-  $('shortcut-hint').classList.toggle('active', step >= (currentMode === 'image' ? 1 : 2));
-  $('demo-selection').classList.toggle('selected', step >= (currentMode === 'image' ? 2 : 1));
-  $('demo-selection').classList.toggle('capture', currentMode === 'image' && step >= 2);
-  $('response-preview').hidden = currentMode === 'code' ? step < 4 : step < 3;
-  $('clipboard-preview').hidden = currentMode !== 'code' || step < 3 || step === 4;
-  $('example-code').hidden = currentMode !== 'code';
-  $('copy-example').textContent = currentMode === 'code' ? '예시 코드 복사' : '예시 설명 복사';
-  $('copy-state').textContent = currentMode === 'code' ? '코드를 검토하고 직접 사용하세요.' : step === 4 ? '앱에서도 직접 복사 버튼을 누릅니다.' : '내용을 검토한 뒤 복사하세요.';
+  $('shortcut-hint').classList.toggle('active', step >= (capture ? 1 : 2));
+  $('demo-selection').classList.toggle('selected', step >= (capture ? 2 : 1));
+  $('demo-selection').classList.toggle('capture', capture && step >= 2);
+  $('response-preview').hidden = copiesCode() ? step < 4 : step < 3;
+  $('clipboard-preview').hidden = !copiesCode() || step < 3 || step === 4;
+  $('example-code').hidden = !copiesCode();
+  $('copy-example').textContent = copiesCode() ? '예시 코드 복사' : '예시 설명 복사';
+  $('copy-state').textContent = copiesCode() ? '코드를 검토하고 직접 사용하세요.' : step === 4 ? '앱에서도 직접 복사 버튼을 누릅니다.' : '내용을 검토한 뒤 복사하세요.';
 }
 document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => {
   currentMode = button.dataset.mode; step = 0; copySequence++; render();
@@ -76,7 +87,7 @@ async function copyText(text) {
 }
 $('copy-example').addEventListener('click', async () => {
   const sequence = ++copySequence;
-  const text = currentMode === 'code' ? $('example-code').textContent : modes[currentMode].response;
+  const text = copiesCode() ? $('example-code').textContent : modes[currentMode].response;
   try {
     await copyText(text);
     if (sequence === copySequence) $('copy-state').textContent = '예시를 복사했습니다. 붙여넣기는 직접 하세요.';

@@ -54,16 +54,23 @@ const report = name => console.log('PASS ' + name);
     await page.locator('[data-mode="image"]').focus();
     await page.keyboard.press('Enter');
     assert.equal(await page.locator('[data-mode="image"]').getAttribute('aria-pressed'),'true');
-    for(const mode of ['text','image','code']) {
+    assert.equal(await page.locator('.feature').count(),4);
+    assert.equal(await page.locator('[data-mode]').count(),4);
+    for(const mode of ['text','image','code','captureCode']) {
+      const codeMode = mode === 'code' || mode === 'captureCode';
       await page.locator(`[data-mode="${mode}"]`).click();
       assert.equal(await page.locator('#response-preview').isVisible(),false);
       for(let step=1; step<=4; step++) {
         await page.locator('#demo-next').click();
         assert.equal(await page.locator('.demo-steps li[aria-current="step"]').count(),1);
-        assert.equal(await page.locator('#response-preview').isVisible(),mode==='code' ? step===4 : step>=3);
-        assert.equal(await page.locator('#clipboard-preview').isVisible(),mode==='code' && step===3);
+        assert.equal(await page.locator('#response-preview').isVisible(),codeMode ? step===4 : step>=3);
+        assert.equal(await page.locator('#clipboard-preview').isVisible(),codeMode && step===3);
+        if(mode==='captureCode') {
+          assert.equal(await page.locator('#demo-selection').evaluate(node=>node.classList.contains('capture')),step>=2);
+          assert.equal(await page.locator('#shortcut-hint').textContent(),'⌘ ⇧ 7');
+        }
       }
-      if(mode==='code') {
+      if(codeMode) {
         assert.equal(await page.locator('#example-code').isVisible(),true);
         assert.match(await page.locator('#demo-status').textContent(),/직접 ⌘V/);
       }
@@ -101,6 +108,16 @@ const report = name => console.log('PASS ' + name);
     assert.equal(await page.locator('#install-copy-status').textContent(),'설치 명령을 복사했습니다.');
     assert.match(await page.evaluate(() => window.copyRequests[4].text),/git clone https:\/\/github.com\/SoonGwan\/StudyLens.git\ncd StudyLens\nbun install\nbun run app:build\nopen src-tauri\/target\/release\/bundle\/dmg/);
     report('repeated install copy: newest result survives old failure');
+    await page.locator('[data-mode="captureCode"]').click();
+    for(let i=0;i<3;i++) await page.locator('#demo-next').click();
+    assert.equal(await page.evaluate(()=>window.copyRequests.length),5,'demo steps never automatically copy to the real clipboard');
+    await page.locator('#demo-next').click();
+    await page.locator('#copy-example').click();
+    assert.equal(await page.evaluate(()=>window.copyRequests[5].text),await page.locator('#example-code').textContent());
+    await page.locator('[data-mode="text"]').click();
+    await page.evaluate(()=>window.copyRequests[5].resolve());
+    assert.equal(await page.locator('#copy-state').textContent(),'내용을 검토한 뒤 복사하세요.');
+    report('capture-code copies code only on explicit click; late completion stays invalidated');
     assert.deepEqual(errors,[]);
     assert.deepEqual(requests.filter(url=>new URL(url).origin!==new URL(base).origin),[]);
     report('no page errors or external requests');
@@ -110,6 +127,7 @@ const report = name => console.log('PASS ' + name);
     await staticPage.locator('summary').first().click();
     assert.equal(await staticPage.locator('details[open]').count(),1);
     assert.match(await staticPage.locator('noscript').textContent(),/코드만 성공 시 자동 복사/);
+    assert.match(await staticPage.locator('noscript').textContent(),/캡처 → 코드는 ⌘⇧7/);
     assert.equal(await staticPage.evaluate(() => document.documentElement.scrollWidth>innerWidth),false);
     assert.equal(await staticPage.locator('a[href="#install"]').first().isVisible(),true);
     await noJS.close();

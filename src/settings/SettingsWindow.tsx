@@ -216,7 +216,7 @@ function Welcome({ view, onDone }: { view: SettingsView; onDone: () => void }) {
       <div>
         <h2>StudyLens에 오신 걸 환영해요</h2>
         <p>
-          {isMac ? "메뉴바" : "작업 표시줄 트레이"}의 작은 점 아이콘에서 실행돼요. 평소에는 숨어 있다가 단축키를 누를 때만 나타납니다.
+          {isMac ? "메뉴바의 달 아이콘을 Option-클릭하면" : "작업 표시줄 트레이 아이콘을 클릭하면"} 기능과 설정을 열 수 있어요. 캡처 → 코드는 단축키를 누른 뒤 문제 영역만 선택하면 결과 창 없이 복사됩니다.
         </p>
         <ul>
           <li><kbd>{show(k.capture)}</kbd> 화면 영역을 선택해 설명 받기</li>

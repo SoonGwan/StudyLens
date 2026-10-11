@@ -1,5 +1,7 @@
 # StudyLens 0.2.6 검증 기록
 
+> 과거 **SwiftUI 0.2.6** 구현의 검증 기록입니다. 여기의 `build-app.sh`, Swift 앱 테스트와 `com.example.StudyLens`는 현재 Tauri 0.3.0에 적용되지 않습니다. 현재 설치·기능·검증 상태는 [README](../README.md#검증-상태와-문서), [캡처 → 코드 검증](capture-code-verification.md), [트레이 메뉴 검증](tray-menu-verification.md)을 참고하세요. 당시의 미검증 표현은 역사적 기록으로 유지합니다.
+
 대상은 GitHub 이슈 #1~#5입니다. 로컬 구현과 합성 입력·가짜 네트워크 검증을 진행했으며, 실제 사용자 로그인/AI 요청·인증서 발급·권한 변경은 실행하지 않았습니다. 원격 이슈를 완료로 닫거나 앱을 설치·배포하지 않았습니다.
 
 자동 검증: `swift test` 76개 통과(실패 0), `./build-app.sh` 릴리스 빌드 성공, 생성 앱의 `codesign --verify --strict` 통과, `zsh -n build-app.sh` 및 `git diff --check` 통과. 앱 버전은 0.2.6/빌드 8입니다.
