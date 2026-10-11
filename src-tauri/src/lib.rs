@@ -47,6 +47,7 @@ pub fn run() {
             commands::open_settings,
             commands::tray_action,
             commands::get_tray_mode,
+            commands::get_tray_symbols,
             commands::hide_window,
             commands::overlay_image,
             commands::overlay_finish,

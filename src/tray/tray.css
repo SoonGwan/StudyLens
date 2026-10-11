@@ -59,17 +59,18 @@ body {
   background: rgba(255, 255, 255, 0.96);
 }
 
-.moon-badge > svg {
+.moon-badge > svg,
+.moon-badge > .native-glyph {
   display: block;
   width: 25px;
   height: 25px;
   color: #6864ff;
 }
 
-.tray-status.selecting .moon-badge > svg,
-.tray-status.analyzing .moon-badge > svg { color: #ff9f0a; }
-.tray-status.ready .moon-badge > svg { color: #30d158; }
-.tray-status.failed .moon-badge > svg { color: #ff453a; }
+.tray-status.selecting .moon-badge > *,
+.tray-status.analyzing .moon-badge > * { color: #ff9f0a; }
+.tray-status.ready .moon-badge > * { color: #30d158; }
+.tray-status.failed .moon-badge > * { color: #ff453a; }
 
 .tray-actions { padding: 6px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.09); }
 .tray-action,
@@ -129,18 +130,27 @@ body {
 .tray-bottom button:last-child { flex: none; color: rgba(255, 255, 255, 0.58); }
 
 .focus-popover { display: flex; flex-direction: column; }
-.focus-header { height: 44px; flex: none; margin: 0 14px; padding: 5px 0 4px; border-bottom: 1px solid rgba(255,255,255,.09); }
+.focus-header { height: 42px; flex: none; padding-top: 5px; margin: 0 14px; border-bottom: 1px solid rgba(255,255,255,.09); }
 .focus-header strong { display: block; font-size: 14px; line-height: 20px; }
-.focus-header span { color: rgba(255,255,255,.54); font-size: 10.5px; line-height: 14px; }
 .focus-row, .focus-duration button, .focus-settings { border: 0; background: transparent; color: inherit; text-align: left; }
-.focus-row { width: 100%; display: flex; align-items: center; gap: 10px; height: 32px; padding: 3px 14px; }
-.focus-row strong { font-size: 13.5px; font-weight: 550; }
+.focus-row { width: 100%; display: flex; align-items: center; gap: 8px; height: 32px; padding: 3px 14px; }
+.focus-row strong { font-size: 13px; font-weight: 600; }
 .focus-circle { --focus-icon-bg: #2b2b38; display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--focus-icon-bg); color: #a3a3ac; }
-.focus-circle svg { width: 17px; height: 17px; }
+.focus-circle svg, .focus-circle .native-glyph { width: 17px; height: 17px; }
+.focus-circle .glyph-moon, .focus-circle .glyph-bed, .focus-circle .glyph-reduce { width: 20px; height: 20px; }
+.native-glyph { display: block; background: currentColor; mask-size: contain; mask-position: center; mask-repeat: no-repeat; -webkit-mask-size: contain; -webkit-mask-position: center; -webkit-mask-repeat: no-repeat; }
 .focus-circle.active { --focus-icon-bg: #fff; background: #fff; color: #7772ff; }
 .focus-primary { height: 42px; flex: none; }
 .focus-duration { padding: 3px 0; background: rgba(255,255,255,.07); }
-.focus-duration button { display: block; width: 100%; height: 25px; padding: 0 0 0 53px; font-size: 13px; font-weight: 550; }
+.focus-duration button { display: block; width: 100%; height: 25px; padding: 0 0 0 48px; font-size: 13px; font-weight: 600; }
 .focus-modes { padding: 4px 0; }
-.focus-settings { height: 34px; flex: none; margin: 0 14px; padding: 0; border-top: 1px solid rgba(255,255,255,.09); font-size: 12px; font-weight: 550; }
-.focus-row:hover, .focus-duration button:hover, .focus-settings:hover { background: rgba(255,255,255,.07); }
+.focus-settings { height: 34px; flex: none; margin: 0 14px; padding: 0; border-top: 1px solid rgba(255,255,255,.09); font-size: 12px; font-weight: 600; }
+
+/* macOS highlights sit inside the panel, not edge-to-edge. Keep the divider fixed. */
+.focus-row, .focus-duration button, .focus-settings { position: relative; isolation: isolate; outline: none; cursor: default; -webkit-tap-highlight-color: transparent; }
+.focus-row::before, .focus-duration button::before, .focus-settings::before { content: ""; position: absolute; z-index: -1; inset: 0 6px; border-radius: 10px; background: transparent; pointer-events: none; }
+.focus-primary::before { top: 5px; bottom: 5px; }
+.focus-settings::before { inset: 3px -7px; }
+.focus-row:hover::before, .focus-duration button:hover::before, .focus-settings:hover::before { background: rgba(255,255,255,.08); }
+.focus-row:active::before, .focus-duration button:active::before, .focus-settings:active::before { background: rgba(255,255,255,.12); }
+.focus-row:focus-visible::before, .focus-duration button:focus-visible::before, .focus-settings:focus-visible::before { background: rgba(255,255,255,.08); outline: 2px solid rgba(140,135,255,.8); outline-offset: -2px; }

@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { api, isMac, useResult, useSettingsView, useTrayMode, type ResultState } from "../lib/ipc";
 import { displayAccelerator } from "../lib/shortcut";
+import { focusDurationLabel } from "../lib/focus";
 
 const STATUS: Record<ResultState["status"], string> = {
   idle: "대기 중",
@@ -10,16 +11,23 @@ const STATUS: Record<ResultState["status"], string> = {
   failed: "확인 필요",
 };
 
+const NativeSymbols = createContext<Record<string, string>>({});
+
 export function TrayPopover() {
   const appMenu = useTrayMode();
+  const [symbols, setSymbols] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let active = true;
+    if (isMac) api.getTraySymbols().then(value => { if (active) setSymbols(value); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
   useEffect(() => {
     const close = (event: KeyboardEvent) => event.key === "Escape" && api.hideWindow();
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, []);
   if (appMenu === null) return null;
-  if (!appMenu) return <FocusPopover />;
-  return <AppPopover />;
+  return <NativeSymbols.Provider value={symbols}>{appMenu ? <AppPopover /> : <FocusPopover />}</NativeSymbols.Provider>;
 }
 
 function AppPopover() {
@@ -69,15 +77,20 @@ function AppPopover() {
 
 function FocusPopover() {
   const open = () => api.trayAction("focus-settings");
+  const [duration, setDuration] = useState(() => focusDurationLabel(new Date().getHours()));
+  useEffect(() => {
+    const timer = window.setInterval(() => setDuration(focusDurationLabel(new Date().getHours())), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   return (
     <main className="tray-popover focus-popover" aria-label="StudyLens 집중 모드 메뉴">
-      <header className="focus-header"><strong>집중 모드</strong><span>StudyLens</span></header>
+      <header className="focus-header"><strong>집중 모드</strong></header>
       <button className="focus-row focus-primary" onClick={open}>
         <span className="focus-circle active"><Glyph name="moon" /></span><strong>방해금지 모드</strong>
       </button>
       <section className="focus-duration">
         <button onClick={open}>1시간 동안</button>
-        <button onClick={open}>오늘 저녁까지</button>
+        <button onClick={open}>{duration}</button>
       </section>
       <section className="focus-modes">
         <button className="focus-row" onClick={open}><span className="focus-circle"><Glyph name="person" /></span><strong>개인 시간</strong></button>
@@ -91,6 +104,8 @@ function FocusPopover() {
 }
 
 function Glyph({ name }: { name: "moon" | "person" | "work" | "bed" | "reduce" }) {
+  const native = useContext(NativeSymbols)[name];
+  if (native) return <span aria-hidden="true" className={`native-glyph glyph-${name}`} style={{ maskImage: `url("${native}")`, WebkitMaskImage: `url("${native}")` }} />;
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
       {name === "moon" && <path d="M9.4 1.7a10.5 10.5 0 1 0 12.9 12.9A9 9 0 0 1 9.4 1.7Z" />}

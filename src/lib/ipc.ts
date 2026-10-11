@@ -109,6 +109,7 @@ export const api = {
   openSettings: () => invoke("open_settings"),
   trayAction: (action: "capture" | "text" | "code" | "cancel" | "result" | "settings" | "quit" | "focus-settings") => invoke("tray_action", { action }),
   getTrayMode: () => invoke<boolean>("get_tray_mode"),
+  getTraySymbols: () => invoke<Record<string, string>>("get_tray_symbols"),
   hideWindow: () => invoke("hide_window"),
   overlayImage: () => invoke<string | null>("overlay_image"),
   overlayFinish: (rect: { x: number; y: number; width: number; height: number } | null) => invoke("overlay_finish", { rect }),

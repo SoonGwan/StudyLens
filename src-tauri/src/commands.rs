@@ -170,6 +170,11 @@ pub fn get_tray_mode() -> bool {
 }
 
 #[tauri::command]
+pub fn get_tray_symbols() -> std::collections::HashMap<&'static str, String> {
+    crate::tray::symbols()
+}
+
+#[tauri::command]
 pub fn hide_window(window: tauri::WebviewWindow) {
     let _ = window.hide();
 }

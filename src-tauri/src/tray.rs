@@ -16,6 +16,23 @@ pub fn app_menu() -> bool {
     APP_MENU.load(Ordering::Relaxed)
 }
 
+/// Monochrome menu glyphs rendered by AppKit, independent of account state.
+pub fn symbols() -> std::collections::HashMap<&'static str, String> {
+    #[cfg(target_os = "macos")]
+    {
+        use base64::Engine;
+        [
+            ("moon", include_bytes!(concat!(env!("OUT_DIR"), "/focus-moon.png")).as_slice()),
+            ("person", include_bytes!(concat!(env!("OUT_DIR"), "/focus-person.png")).as_slice()),
+            ("work", include_bytes!(concat!(env!("OUT_DIR"), "/focus-work.png")).as_slice()),
+            ("bed", include_bytes!(concat!(env!("OUT_DIR"), "/focus-bed.png")).as_slice()),
+            ("reduce", include_bytes!(concat!(env!("OUT_DIR"), "/focus-reduce.png")).as_slice()),
+        ].into_iter().map(|(key, png)| (key, format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)))).collect()
+    }
+    #[cfg(not(target_os = "macos"))]
+    std::collections::HashMap::new()
+}
+
 pub fn create(app: &AppHandle) -> tauri::Result<TrayIcon> {
     let state = ResultState::default();
     TrayIconBuilder::with_id(TRAY_ID)
@@ -157,6 +174,21 @@ mod tests {
         let visible = image.rgba().chunks_exact(4).filter(|p| p[3] > 20).count();
         assert!(visible > 200 && visible < 900, "symbol must be visible, not blank or a filled square");
         assert_eq!(image.rgba()[3], 0, "template padding is transparent");
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn menu_symbols_are_native_transparent_images() {
+        use base64::Engine;
+        let symbols = symbols();
+        assert_eq!(symbols.len(), 5);
+        for encoded in symbols.values() {
+            let data = base64::engine::general_purpose::STANDARD.decode(encoded.strip_prefix("data:image/png;base64,").unwrap()).unwrap();
+            let image = Image::from_bytes(&data).unwrap();
+            assert_eq!((image.width(), image.height()), (72, 72));
+            assert!(image.rgba().chunks_exact(4).filter(|p| p[3] > 20).count() > 150);
+            assert_eq!(image.rgba()[3], 0);
+        }
     }
 
     #[test]

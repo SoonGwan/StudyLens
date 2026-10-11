@@ -40,7 +40,7 @@ pub fn toggle_tray(app: &AppHandle, anchor: tauri::Rect) {
         },
     };
 
-    let size = if crate::tray::app_menu() { (344.0, 390.0) } else { (308.0, 314.0) };
+    let size = if crate::tray::app_menu() { (344.0, 390.0) } else { (308.0, 312.0) };
     let _ = window.set_size(tauri::LogicalSize::new(size.0, size.1));
     let scale = window.scale_factor().unwrap_or(1.0);
     let width = size.0 * scale;
@@ -62,7 +62,7 @@ pub fn toggle_tray(app: &AppHandle, anchor: tauri::Rect) {
 fn build_tray(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     let mut builder = WebviewWindowBuilder::new(app, "tray", WebviewUrl::App("tray.html".into()))
         .title("StudyLens")
-        .inner_size(308.0, 314.0)
+        .inner_size(308.0, 312.0)
         .decorations(false)
         .resizable(false)
         .transparent(true)
