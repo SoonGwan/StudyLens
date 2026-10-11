@@ -1,4 +1,4 @@
-//! Backends that answer the three StudyLens requests. The controller builds one provider
+//! Backends that answer StudyLens requests. The controller builds one provider
 //! per request from the selected billing mode, so a new backend only needs to implement
 //! [`InferenceProvider`].
 
@@ -25,6 +25,7 @@ pub trait InferenceProvider: Send + Sync {
     async fn explain_image(&self, png: &[u8]) -> Result<String, InferenceError>;
     async fn explain_text(&self, text: &str) -> Result<String, InferenceError>;
     async fn generate_code(&self, text: &str, language: &str) -> Result<String, InferenceError>;
+    async fn generate_code_from_image(&self, png: &[u8], language: &str) -> Result<String, InferenceError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

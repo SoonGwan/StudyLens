@@ -1,4 +1,4 @@
-//! App state and the three user workflows (capture, selected text, quick code copy).
+//! App state and the explanation and clipboard-only code workflows.
 //! Windows render snapshots of this state; every change is pushed as an event.
 //!
 //! Each request gets an id. Cancelling aborts its task and retires the id, so a late
@@ -43,6 +43,27 @@ pub enum Action {
     Capture,
     Text,
     Code,
+    CaptureCode,
+}
+
+impl Action {
+    pub fn from_id(id: &str) -> Option<Self> {
+        match id {
+            "capture" => Some(Self::Capture),
+            "text" => Some(Self::Text),
+            "code" => Some(Self::Code),
+            "capture-code" => Some(Self::CaptureCode),
+            _ => None,
+        }
+    }
+
+    fn silent(self) -> bool {
+        matches!(self, Self::Code | Self::CaptureCode)
+    }
+
+    fn initial_stage(self) -> Stage {
+        if matches!(self, Self::Capture | Self::CaptureCode) { Stage::SelectingImage } else { Stage::ReadingSelection }
+    }
 }
 
 /// Points the result window at the fix for an error.
@@ -56,6 +77,23 @@ pub enum Hint {
     ChatGptUsage,
     ClaudeUsage,
     Settings,
+}
+
+#[cfg(test)]
+mod action_tests {
+    use super::*;
+
+    #[test]
+    fn capture_code_is_silent_and_starts_with_region_selection() {
+        assert_eq!(Action::from_id("capture-code"), Some(Action::CaptureCode));
+        assert!(Action::CaptureCode.silent());
+        assert_eq!(Action::CaptureCode.initial_stage(), Stage::SelectingImage);
+        assert!(Action::Code.silent());
+        assert_eq!(Action::Code.initial_stage(), Stage::ReadingSelection);
+        assert!(!Action::Capture.silent());
+        assert!(!Action::Text.silent());
+        assert_eq!(Action::from_id("invalid"), None);
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -349,7 +387,7 @@ impl Core {
         let Some(core) = self.me.upgrade() else { return };
         let options = self.options();
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-        let silent = action == Action::Code;
+        let silent = action.silent();
         {
             let mut active = self.active.lock().unwrap();
             let mut state = self.result.lock().unwrap();
@@ -357,11 +395,15 @@ impl Core {
                 return;
             }
             *active = Some(Active { id, task: None });
-            let stage = if action == Action::Capture { Stage::SelectingImage } else { Stage::ReadingSelection };
+            let stage = action.initial_stage();
             let effort = if options.mode == BillingMode::ClaudeCode { None } else { capabilities::validated_effort(&options.effort, &options.model) };
             *state = ResultState {
                 status: Status::Selecting,
-                quick_copy_message: silent.then(|| "선택한 텍스트 읽는 중…".to_string()),
+                quick_copy_message: silent.then(|| if action == Action::CaptureCode {
+                    "문제 영역을 드래그하세요 · Esc로 취소".to_string()
+                } else {
+                    "선택한 텍스트 읽는 중…".to_string()
+                }),
                 billing_label: options.mode.title().into(),
                 progress: Some(RequestProgress::new(stage, &options.model, options.mode.title(), effort.as_deref())),
                 ..Default::default()
@@ -376,6 +418,7 @@ impl Core {
                 Action::Capture => core.capture_flow(id, &options).await,
                 Action::Text => core.text_flow(id, &options).await,
                 Action::Code => core.code_flow(id, &options).await,
+                Action::CaptureCode => core.capture_code_flow(id, &options).await,
             };
             core.conclude(id, outcome, silent, options.mode);
         });
@@ -498,16 +541,47 @@ impl Core {
         let provider = self.provider(id, options, image).await?;
         self.begin_inference(id, true)?;
         let response = provider.generate_code(&text, &options.language).await.map_err(|e| self.inference_failure(e))?;
-        let shown = quick_code::normalize_complete_java_source(&response);
+        self.copy_generated_code(id, &response)
+    }
+
+    /// Captures only the user's dragged region; never reads selected text or opens a result window.
+    async fn capture_code_flow(&self, id: u64, options: &Options) -> Result<(), Stop> {
+        // Validate before asking the user to select a region or contacting a provider.
+        capabilities::validate_text(crate::inference::prompts::IMAGE_CODE_REQUEST, &options.additional_instructions)?;
+        if options.mode != BillingMode::ClaudeCode && !capabilities::supports_image(&options.model) {
+            return Err(InputError::UnsupportedImageModel.into());
+        }
+        let png = platform::capture_region(&self.app, false).await.map_err(capture_stop)?;
+        capabilities::validate_png(&png)?;
+        self.update_for(id, |s| {
+            s.captured_image = Some(data_url(&png));
+            s.quick_copy_message = Some("캡처한 문제로 코드 작성 중… 완료되면 클립보드에 복사합니다.".into());
+            if let Some(p) = s.progress.as_mut() {
+                p.prepare_connection();
+            }
+        })?;
+        // The image is the primary input, regardless of the optional text attachment setting.
+        let provider = self.provider(id, options, None).await?;
+        self.begin_inference(id, true)?;
+        let response = provider.generate_code_from_image(&png, &options.language).await.map_err(|e| self.inference_failure(e))?;
+        self.copy_generated_code(id, &response)
+    }
+
+    fn copy_generated_code(&self, id: u64, response: &str) -> Result<(), Stop> {
+        let shown = quick_code::normalize_complete_java_source(response);
         self.set_explanation(id, &shown)?;
         self.progress_for(id, |p| p.set_stage(Stage::Copying))?;
-        let extracted = quick_code::extract(&response)?;
-        // Last check right before touching the clipboard.
-        if !self.is_current(id) {
-            return Err(Stop::Cancelled);
-        }
-        if self.app.clipboard().write_text(extracted.block.text.clone()).is_err() {
-            return Err(Failure::new("코드를 클립보드에 저장하지 못했습니다.", None).into());
+        let extracted = quick_code::extract(response)?;
+        // Hold the lifecycle lock through the write: cancellation cannot retire this
+        // request between the final check and a late clipboard overwrite.
+        {
+            let active = self.active.lock().unwrap();
+            if !active.as_ref().is_some_and(|a| a.id == id) {
+                return Err(Stop::Cancelled);
+            }
+            if self.app.clipboard().write_text(extracted.block.text.clone()).is_err() {
+                return Err(Failure::new("코드를 클립보드에 저장하지 못했습니다.", None).into());
+            }
         }
         let paste = if cfg!(target_os = "macos") { "⌘V" } else { "Ctrl+V" };
         self.update_for(id, |s| {
@@ -680,7 +754,7 @@ impl Core {
     pub fn save_settings(&self, mut next: Settings) -> Result<(), String> {
         let previous = self.settings();
         next.host_id = previous.host_id.clone();
-        let shortcuts = [&next.shortcuts.capture, &next.shortcuts.text, &next.shortcuts.code];
+        let shortcuts = [&next.shortcuts.capture, &next.shortcuts.text, &next.shortcuts.code, &next.shortcuts.capture_code];
         if shortcuts.iter().enumerate().any(|(i, a)| shortcuts.iter().skip(i + 1).any(|b| a == b)) {
             return Err("다른 StudyLens 기능이 사용 중인 단축키입니다. 다른 조합을 입력하세요.".into());
         }

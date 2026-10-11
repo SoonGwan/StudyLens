@@ -39,6 +39,7 @@ export interface RequestProgress {
 
 export interface Shortcuts {
   capture: string;
+  captureCode: string;
   text: string;
   code: string;
 }
@@ -88,7 +89,7 @@ export interface SettingsView {
 export const api = {
   getResult: () => invoke<ResultState>("get_result"),
   getSettings: () => invoke<SettingsView>("get_settings"),
-  start: (action: "capture" | "text" | "code") => invoke("start", { action }),
+  start: (action: "capture" | "text" | "code" | "capture-code") => invoke("start", { action }),
   cancel: () => invoke("cancel_request"),
   setReasoning: (effort: string) => invoke("set_reasoning", { effort }),
   permissionStatus: () => invoke<{ accessibility: boolean; screenRecording: boolean } | null>("permission_status"),
@@ -107,7 +108,7 @@ export const api = {
   openLink: (url: string) => invoke("open_link", { url }),
   openPrivacySettings: (kind: "screen" | "accessibility") => invoke("open_privacy_settings", { kind }),
   openSettings: () => invoke("open_settings"),
-  trayAction: (action: "capture" | "text" | "code" | "cancel" | "result" | "settings" | "quit" | "focus-settings") => invoke("tray_action", { action }),
+  trayAction: (action: "capture" | "text" | "code" | "capture-code" | "cancel" | "result" | "settings" | "quit" | "focus-settings") => invoke("tray_action", { action }),
   getTrayMode: () => invoke<boolean>("get_tray_mode"),
   getTraySymbols: () => invoke<Record<string, string>>("get_tray_symbols"),
   hideWindow: () => invoke("hide_window"),

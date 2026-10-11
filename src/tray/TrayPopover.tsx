@@ -58,6 +58,7 @@ function AppPopover() {
         <Action icon="⌗" label="영역 캡처" detail="화면 문제를 설명" shortcut={shortcut("capture")} disabled={working} onClick={() => run("capture")} />
         <Action icon="T" label="선택 텍스트" detail="선택한 문제를 설명" shortcut={shortcut("text")} disabled={working} onClick={() => run("text")} />
         <Action icon="‹›" label="코드 바로 복사" detail={`${view.settings.codeLanguage} 코드만 클립보드로`} shortcut={shortcut("code")} disabled={working} onClick={() => run("code")} />
+        <Action icon="⌗" label="문제 캡처 → 코드 복사" detail="문제 영역만 선택 · 결과 창 없이 복사" shortcut={shortcut("captureCode")} disabled={working} onClick={() => run("capture-code")} />
       </section>
 
       {working ? (

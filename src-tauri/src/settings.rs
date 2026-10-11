@@ -38,6 +38,7 @@ pub struct Shortcuts {
     pub capture: String,
     pub text: String,
     pub code: String,
+    pub capture_code: String,
 }
 
 impl Default for Shortcuts {
@@ -46,6 +47,7 @@ impl Default for Shortcuts {
             capture: "CommandOrControl+Shift+9".into(),
             text: "CommandOrControl+Shift+0".into(),
             code: "CommandOrControl+Shift+8".into(),
+            capture_code: "CommandOrControl+Shift+7".into(),
         }
     }
 }
@@ -117,6 +119,18 @@ pub fn save(path: &Path, settings: &Settings) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_capture_code_shortcut_preserves_existing_custom_shortcuts() {
+        let shortcuts: Shortcuts = serde_json::from_str(r#"{"capture":"Super+Shift+E","text":"Super+Shift+0","code":"Super+Shift+F"}"#).unwrap();
+        assert_eq!(shortcuts.capture, "Super+Shift+E");
+        assert_eq!(shortcuts.code, "Super+Shift+F");
+        assert_eq!(shortcuts.capture_code, "CommandOrControl+Shift+7");
+        assert!(shortcuts.capture_code.parse::<tauri_plugin_global_shortcut::Shortcut>().is_ok());
+        let serialized = serde_json::to_value(&shortcuts).unwrap();
+        assert_eq!(serialized["captureCode"], "CommandOrControl+Shift+7");
+        assert_eq!(serde_json::from_value::<Shortcuts>(serialized).unwrap(), shortcuts);
+    }
 
     #[test]
     fn round_trips_and_fills_missing_fields() {

@@ -55,6 +55,7 @@ export function SettingsWindow() {
           <ShortcutRow name="영역 캡처" field="capture" view={view} save={save} />
           <ShortcutRow name="선택 텍스트 설명" field="text" view={view} save={save} />
           <ShortcutRow name="코드 바로 복사" field="code" view={view} save={save} />
+          <ShortcutRow name="문제 캡처 → 코드 복사" field="captureCode" view={view} save={save} />
           {view.shortcutErrors.map((e) => (
             <p key={e} className="message error-text">{e}</p>
           ))}
@@ -63,7 +64,7 @@ export function SettingsWindow() {
 
         <Section
           title="코드 바로 복사"
-          note="결과 창 없이 코드만 클립보드에 넣습니다. 본문에 언어를 적으면 그 언어를 우선합니다. 복사 성공은 코드 형식 인식과 클립보드 저장만 뜻하며 컴파일·정답 검증은 아닙니다. 구분자 없는 원문은 단독 Java 클래스만 인식합니다."
+          note="텍스트 선택 또는 문제 영역 캡처 후 결과 창 없이 코드만 클립보드에 넣습니다. 본문·이미지에 언어를 적으면 그 언어를 우선합니다. 복사 성공은 코드 형식 인식과 클립보드 저장만 뜻하며 컴파일·정답 검증은 아닙니다. 구분자 없는 원문은 단독 Java 클래스만 인식합니다."
         >
           <Row label="기본 언어">
             <select value={s.codeLanguage} onChange={(e) => save({ codeLanguage: e.target.value })}>
@@ -221,6 +222,7 @@ function Welcome({ view, onDone }: { view: SettingsView; onDone: () => void }) {
           <li><kbd>{show(k.capture)}</kbd> 화면 영역을 선택해 설명 받기</li>
           <li><kbd>{show(k.text)}</kbd> 드래그한 텍스트 설명 받기</li>
           <li><kbd>{show(k.code)}</kbd> 드래그한 문제의 코드만 바로 복사</li>
+          <li><kbd>{show(k.captureCode)}</kbd> 문제 영역을 캡처해서 코드만 바로 복사</li>
         </ul>
         <button className="btn primary" onClick={onDone}>시작하기</button>
       </div>

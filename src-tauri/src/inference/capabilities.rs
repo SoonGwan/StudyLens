@@ -74,6 +74,11 @@ pub fn validate_image(png: &[u8], model: &str) -> Result<(), InputError> {
     if !supports_image(model) {
         return Err(InputError::UnsupportedImageModel);
     }
+    validate_png(png)
+}
+
+/// Format and size checks shared by OpenAI and Claude image requests.
+pub fn validate_png(png: &[u8]) -> Result<(), InputError> {
     if png.len() > MAX_IMAGE_BYTES {
         return Err(InputError::ImageTooLarge);
     }

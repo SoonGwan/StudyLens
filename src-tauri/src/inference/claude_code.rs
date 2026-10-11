@@ -130,9 +130,21 @@ impl InferenceProvider for ClaudeCode {
     async fn generate_code(&self, text: &str, language: &str) -> Result<String, InferenceError> {
         self.perform(self.selection_content(text)?, &prompts::code_instructions(language)).await
     }
+
+    async fn generate_code_from_image(&self, png: &[u8], language: &str) -> Result<String, InferenceError> {
+        self.perform(self.image_code_content(png)?, &prompts::code_instructions(language)).await
+    }
 }
 
 impl ClaudeCode {
+    fn image_code_content(&self, png: &[u8]) -> Result<Vec<Value>, InferenceError> {
+        capabilities::validate_png(png)?;
+        let mut content = self.selection_content(prompts::IMAGE_CODE_REQUEST)?;
+        let data = base64::engine::general_purpose::STANDARD.encode(png);
+        content.push(json!({ "type": "image", "source": { "type": "base64", "media_type": "image/png", "data": data } }));
+        Ok(content)
+    }
+
     fn selection_content(&self, text: &str) -> Result<Vec<Value>, InferenceError> {
         capabilities::validate_text(text, &self.additional_instructions)?;
         let mut content = vec![text_block(text)];
@@ -308,6 +320,38 @@ fn is_executable(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::inference::capabilities::InputError;
+
+    #[test]
+    fn image_code_message_contains_only_selected_png_and_instructions() {
+        let claude = ClaudeCode { additional_instructions: "solution 함수로".into(), ..Default::default() };
+        let mut png = Vec::new();
+        image::DynamicImage::new_rgba8(2, 3).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let content = claude.image_code_content(&png).unwrap();
+        assert_eq!(content.len(), 3);
+        assert_eq!(content[0]["text"], prompts::IMAGE_CODE_REQUEST);
+        assert_eq!(content[1]["text"], "추가 지시:\nsolution 함수로");
+        assert_eq!(content[2]["source"]["media_type"], "image/png");
+        let decoded = base64::engine::general_purpose::STANDARD.decode(content[2]["source"]["data"].as_str().unwrap()).unwrap();
+        assert_eq!(decoded, png);
+        assert!(matches!(claude.image_code_content(b"bad png"), Err(InferenceError::Input(InputError::InvalidImage))));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn image_code_executes_cli_with_code_prompt_not_explanation_prompt() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("sl-image-code-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = dir.join("claude");
+        std::fs::write(&script, "#!/bin/sh\ninput=$(cat)\ncase \"$* $input\" in\n  *'기본 언어 Java'*'\"media_type\":\"image/png\"'*) printf '%s\\n' '{\"type\":\"result\",\"is_error\":false,\"result\":\"```java\\nclass Solution {}\\n```\"}' ;;\n  *) printf '%s\\n' '{\"type\":\"result\",\"is_error\":true,\"result\":\"잘못된 요청\"}' ;;\nesac\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let claude = ClaudeCode { executable_path: script.to_string_lossy().into_owned(), ..Default::default() };
+        let mut png = Vec::new();
+        image::DynamicImage::new_rgba8(2, 2).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        assert_eq!(claude.generate_code_from_image(&png, "Java").await.unwrap(), "```java\nclass Solution {}\n```");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn arguments_isolate_user_setup_and_disable_tools() {

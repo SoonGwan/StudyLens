@@ -40,7 +40,7 @@ pub fn toggle_tray(app: &AppHandle, anchor: tauri::Rect) {
         },
     };
 
-    let size = if crate::tray::app_menu() { (344.0, 390.0) } else { (308.0, 312.0) };
+    let size = if crate::tray::app_menu() { (344.0, 444.0) } else { (308.0, 312.0) };
     let _ = window.set_size(tauri::LogicalSize::new(size.0, size.1));
     let scale = window.scale_factor().unwrap_or(1.0);
     let width = size.0 * scale;

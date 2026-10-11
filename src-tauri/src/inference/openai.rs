@@ -328,6 +328,19 @@ impl InferenceProvider for OpenAIProvider {
         let payload = self.payload(&prompts::code_instructions(language), self.selection_content(text)?, 12_000)?;
         self.client.respond(&self.credential, payload, self.progress.as_ref()).await
     }
+
+    async fn generate_code_from_image(&self, png: &[u8], language: &str) -> Result<String, InferenceError> {
+        capabilities::validate_image(png, self.model.trim())?;
+        // Do not attach self.image: this workflow sends exactly the selected region once.
+        let mut content = vec![json!({ "type": "input_text", "text": prompts::IMAGE_CODE_REQUEST })];
+        capabilities::validate_text(prompts::IMAGE_CODE_REQUEST, &self.additional_instructions)?;
+        if !self.additional_instructions.trim().is_empty() {
+            content.push(json!({ "type": "input_text", "text": format!("추가 지시:\n{}", self.additional_instructions) }));
+        }
+        content.push(image_part(png));
+        let payload = self.payload(&prompts::code_instructions(language), content, 12_000)?;
+        self.client.respond(&self.credential, payload, self.progress.as_ref()).await
+    }
 }
 
 #[cfg(test)]
@@ -390,6 +403,44 @@ pub mod tests {
     }
 
     const STREAM: &str = "event: x\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"단계별 \"}\n\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"설명\"}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n";
+
+    #[tokio::test]
+    async fn image_code_sends_one_selected_image_with_code_prompt_for_both_credentials() {
+        for kind in [CredentialKind::ChatGpt, CredentialKind::ApiKey] {
+            let answer = "```java\nclass Solution {\n    int solution() { return 42; }\n}\n```";
+            let body = json!({ "status": "completed", "output": [{ "type": "message", "content": [{ "type": "output_text", "text": answer }] }] }).to_string();
+            let (base, seen) = mock(vec![(200, "application/json", body)]).await;
+            let mut provider = provider(&base, kind);
+            provider.additional_instructions = "solution 함수로".into();
+            // Optional text attachment must never cause a second image in this workflow.
+            provider.image = Some(png());
+            let selected = png();
+            let response = provider.generate_code_from_image(&selected, "Java").await.unwrap();
+            assert_eq!(response, answer);
+            let code = crate::quick_code::extract(&response).unwrap();
+            assert_eq!(code.block.text, "class Solution {\n    int solution() { return 42; }\n}\n");
+            let payload = &seen.lock().unwrap()[0].1;
+            assert!(payload["instructions"].as_str().unwrap().contains("기본 언어 Java"));
+            assert!(payload["instructions"].as_str().unwrap().contains("정확히 하나의 Markdown 코드 블록"));
+            let content = payload["input"][0]["content"].as_array().unwrap();
+            assert_eq!(content.len(), 3);
+            assert_eq!(content[0]["text"], prompts::IMAGE_CODE_REQUEST);
+            assert_eq!(content[1]["text"], "추가 지시:\nsolution 함수로");
+            assert_eq!(content[2]["image_url"], format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(&selected)));
+            assert_eq!(payload.get("max_output_tokens").is_some(), kind == CredentialKind::ApiKey);
+        }
+    }
+
+    #[tokio::test]
+    async fn image_code_rejects_invalid_inputs_before_network() {
+        let mut provider = provider("http://127.0.0.1:1", CredentialKind::ApiKey);
+        assert_eq!(provider.generate_code_from_image(b"bad png", "Java").await.unwrap_err(), InferenceError::Input(InputError::InvalidImage));
+        provider.model = "unknown".into();
+        assert_eq!(provider.generate_code_from_image(&png(), "Java").await.unwrap_err(), InferenceError::Input(InputError::UnsupportedImageModel));
+        provider.model = "gpt-4.1-mini".into();
+        provider.additional_instructions = "x".repeat(2001);
+        assert_eq!(provider.generate_code_from_image(&png(), "Java").await.unwrap_err(), InferenceError::Input(InputError::InstructionsTooLong));
+    }
 
     #[tokio::test]
     async fn plan_image_request_streams_until_completed_event_and_reports_progress() {

@@ -17,6 +17,7 @@ pub fn menu_action(app: &AppHandle, id: &str) {
         "capture" => run(app, Action::Capture),
         "text" => run(app, Action::Text),
         "code" => run(app, Action::Code),
+        "capture-code" => run(app, Action::CaptureCode),
         "cancel" => app.state::<Arc<Core>>().cancel(),
         "result" => ui::show_result(app),
         "settings" => ui::show_settings(app),
@@ -37,12 +38,9 @@ pub fn get_settings(core: CoreState) -> SettingsView {
 
 #[tauri::command]
 pub fn start(app: AppHandle, action: String) {
-    let action = match action.as_str() {
-        "capture" => Action::Capture,
-        "text" => Action::Text,
-        _ => Action::Code,
-    };
-    run(&app, action);
+    if let Some(action) = Action::from_id(&action) {
+        run(&app, action);
+    }
 }
 
 #[tauri::command]
@@ -158,7 +156,7 @@ pub fn tray_action(app: AppHandle, action: String) {
         let _ = ui::open_url(&app, "x-apple.systempreferences:com.apple.Focus-Settings.extension");
         return;
     }
-    if matches!(action.as_str(), "capture" | "text" | "code" | "cancel" | "result" | "settings" | "quit") {
+    if matches!(action.as_str(), "capture" | "text" | "code" | "capture-code" | "cancel" | "result" | "settings" | "quit") {
         ui::hide_tray(&app);
         menu_action(&app, &action);
     }

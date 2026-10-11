@@ -34,7 +34,7 @@ pub async fn capture_region(_app: &tauri::AppHandle, prompt: bool) -> Result<Vec
     }
     let target = std::env::temp_dir().join(format!("StudyLens-{}.png", uuid::Uuid::new_v4()));
     let status = Command::new("/usr/sbin/screencapture")
-        .args(["-i", "-x", "-t", "png"])
+        .args(["-i", "-s", "-x", "-t", "png"])
         .arg(&target)
         .kill_on_drop(true)
         .status()
