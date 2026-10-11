@@ -45,6 +45,8 @@ pub fn run() {
             commands::open_link,
             commands::open_privacy_settings,
             commands::open_settings,
+            commands::tray_action,
+            commands::get_tray_mode,
             commands::hide_window,
             commands::overlay_image,
             commands::overlay_finish,

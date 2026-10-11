@@ -150,6 +150,25 @@ pub fn open_settings(app: AppHandle) {
     ui::show_settings(&app);
 }
 
+/// Runs an action from the custom menu-bar popover, then closes that popover.
+#[tauri::command]
+pub fn tray_action(app: AppHandle, action: String) {
+    if action == "focus-settings" {
+        ui::hide_tray(&app);
+        let _ = ui::open_url(&app, "x-apple.systempreferences:com.apple.Focus-Settings.extension");
+        return;
+    }
+    if matches!(action.as_str(), "capture" | "text" | "code" | "cancel" | "result" | "settings" | "quit") {
+        ui::hide_tray(&app);
+        menu_action(&app, &action);
+    }
+}
+
+#[tauri::command]
+pub fn get_tray_mode() -> bool {
+    crate::tray::app_menu()
+}
+
 #[tauri::command]
 pub fn hide_window(window: tauri::WebviewWindow) {
     let _ = window.hide();

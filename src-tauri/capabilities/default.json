@@ -5,6 +5,7 @@
   "windows": [
     "result",
     "settings",
+    "tray",
     "capture-overlay"
   ],
   "permissions": [

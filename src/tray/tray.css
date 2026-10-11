@@ -1,0 +1,146 @@
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+body {
+  background: rgba(16, 16, 25, 0.52);
+}
+
+.tray-popover {
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.19);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(27, 25, 49, 0.56), rgba(15, 15, 23, 0.72));
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34), inset 0 1px rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.tray-header {
+  display: flex;
+  flex-direction: column;
+  height: 56px;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.tray-header strong { font-size: 15px; line-height: 19px; }
+.tray-header span { color: rgba(255, 255, 255, 0.56); font-size: 11.5px; }
+
+.tray-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 74px;
+  padding: 11px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.tray-status > div,
+.action-copy { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.tray-status strong { font-size: 14px; }
+.tray-status small,
+.action-copy small { overflow: hidden; color: rgba(255, 255, 255, 0.55); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+
+.moon-badge {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.moon-badge > svg {
+  display: block;
+  width: 25px;
+  height: 25px;
+  color: #6864ff;
+}
+
+.tray-status.selecting .moon-badge > svg,
+.tray-status.analyzing .moon-badge > svg { color: #ff9f0a; }
+.tray-status.ready .moon-badge > svg { color: #30d158; }
+.tray-status.failed .moon-badge > svg { color: #ff453a; }
+
+.tray-actions { padding: 6px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.09); }
+.tray-action,
+.tray-footer,
+.tray-bottom button {
+  width: 100%;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+
+.tray-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 7px 14px;
+}
+
+.tray-action:hover:not(:disabled),
+.tray-footer:hover:not(:disabled),
+.tray-bottom button:hover { background: rgba(255, 255, 255, 0.09); }
+.tray-action:active:not(:disabled),
+.tray-footer:active:not(:disabled),
+.tray-bottom button:active { background: rgba(255, 255, 255, 0.14); }
+.tray-action:disabled,
+.tray-footer:disabled { opacity: 0.38; }
+
+.action-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.action-copy strong { font-size: 13px; font-weight: 550; }
+.tray-action kbd { color: rgba(255, 255, 255, 0.42); font-size: 10.5px; }
+
+.tray-footer {
+  height: 38px;
+  padding: 0 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  font-size: 12.5px;
+  font-weight: 550;
+}
+.tray-footer.danger { height: 76px; border-bottom: 0; color: #ff6961; }
+
+.tray-bottom { display: flex; height: 37px; }
+.tray-bottom button { width: auto; flex: 1; padding: 0 14px; font-size: 12px; font-weight: 550; white-space: nowrap; }
+.tray-bottom button:last-child { flex: none; color: rgba(255, 255, 255, 0.58); }
+
+.focus-popover { display: flex; flex-direction: column; }
+.focus-header { height: 44px; flex: none; margin: 0 14px; padding: 5px 0 4px; border-bottom: 1px solid rgba(255,255,255,.09); }
+.focus-header strong { display: block; font-size: 14px; line-height: 20px; }
+.focus-header span { color: rgba(255,255,255,.54); font-size: 10.5px; line-height: 14px; }
+.focus-row, .focus-duration button, .focus-settings { border: 0; background: transparent; color: inherit; text-align: left; }
+.focus-row { width: 100%; display: flex; align-items: center; gap: 10px; height: 32px; padding: 3px 14px; }
+.focus-row strong { font-size: 13.5px; font-weight: 550; }
+.focus-circle { --focus-icon-bg: #2b2b38; display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--focus-icon-bg); color: #a3a3ac; }
+.focus-circle svg { width: 17px; height: 17px; }
+.focus-circle.active { --focus-icon-bg: #fff; background: #fff; color: #7772ff; }
+.focus-primary { height: 42px; flex: none; }
+.focus-duration { padding: 3px 0; background: rgba(255,255,255,.07); }
+.focus-duration button { display: block; width: 100%; height: 25px; padding: 0 0 0 53px; font-size: 13px; font-weight: 550; }
+.focus-modes { padding: 4px 0; }
+.focus-settings { height: 34px; flex: none; margin: 0 14px; padding: 0; border-top: 1px solid rgba(255,255,255,.09); font-size: 12px; font-weight: 550; }
+.focus-row:hover, .focus-duration button:hover, .focus-settings:hover { background: rgba(255,255,255,.07); }

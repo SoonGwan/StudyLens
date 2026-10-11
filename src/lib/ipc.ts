@@ -107,6 +107,8 @@ export const api = {
   openLink: (url: string) => invoke("open_link", { url }),
   openPrivacySettings: (kind: "screen" | "accessibility") => invoke("open_privacy_settings", { kind }),
   openSettings: () => invoke("open_settings"),
+  trayAction: (action: "capture" | "text" | "code" | "cancel" | "result" | "settings" | "quit" | "focus-settings") => invoke("tray_action", { action }),
+  getTrayMode: () => invoke<boolean>("get_tray_mode"),
   hideWindow: () => invoke("hide_window"),
   overlayImage: () => invoke<string | null>("overlay_image"),
   overlayFinish: (rect: { x: number; y: number; width: number; height: number } | null) => invoke("overlay_finish", { rect }),
@@ -129,5 +131,6 @@ function useSnapshot<T>(event: string, load: () => Promise<T>): T | null {
 
 export const useResult = () => useSnapshot("result", api.getResult);
 export const useSettingsView = () => useSnapshot("settings", api.getSettings);
+export const useTrayMode = () => useSnapshot("tray-mode", api.getTrayMode);
 
 export const isMac = navigator.userAgent.includes("Mac");

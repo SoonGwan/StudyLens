@@ -14,6 +14,7 @@ export default defineConfig({
       input: {
         result: resolve(__dirname, "result.html"),
         settings: resolve(__dirname, "settings.html"),
+        tray: resolve(__dirname, "tray.html"),
         overlay: resolve(__dirname, "overlay.html"),
       },
     },
