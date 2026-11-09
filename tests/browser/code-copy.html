@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+  <head><meta charset="utf-8"><title>코드 복사 동등성 검사</title></head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import React from "react";
+      import { createRoot } from "react-dom/client";
+      import { mockIPC } from "@tauri-apps/api/mocks";
+      import { ResultWindow } from "/src/result/ResultWindow.tsx";
+      import "/src/styles/base.css";
+      import "/src/result/result.css";
+
+      const root = createRoot(document.getElementById("root"));
+      let state;
+      window.copyQa = {
+        commands: [],
+        mount(record) {
+          this.commands = [];
+          state = {
+            status: record.fixture.error ? "failed" : "ready",
+            explanation: record.normalized, blocks: record.blocks,
+            capturedImage: null, selectedText: "", errorMessage: null, hint: null,
+            copied: false, copiedCodeId: null, quickCopyMessage: null,
+            billingLabel: "fixture", progress: null,
+          };
+          root.render(React.createElement("div", {
+            key: record.fixture.name, "data-fixture": record.fixture.name,
+          }, React.createElement(ResultWindow)));
+        },
+      };
+      mockIPC((command, payload) => {
+        if (command === "get_result") return state;
+        if (command === "get_settings") return null;
+        if (command === "copy_explanation" || command === "copy_code") {
+          window.copyQa.commands.push({ command, payload: payload ?? null });
+          return;
+        }
+        throw new Error(`Unexpected command: ${command}`);
+      }, { shouldMockEvents: true });
+    </script>
+  </body>
+</html>

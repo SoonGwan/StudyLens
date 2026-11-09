@@ -12,6 +12,9 @@ mod settings;
 mod tray;
 mod ui;
 
+#[cfg(test)]
+mod code_copy_parity_tests;
+
 use std::sync::Arc;
 use tauri::Manager;
 

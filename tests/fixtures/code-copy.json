@@ -1,0 +1,445 @@
+[
+  {
+    "name": "java-LF",
+    "response": "```java\nclass Solution {\n\t// example\n\n    int answer = 1;\n}\n```",
+    "expectedCode": "class Solution {\n\t// example\n\n    int answer = 1;\n}\n",
+    "error": null,
+    "codeBlocks": [
+      {
+        "text": "class Solution {\n\t// example\n\n    int answer = 1;\n}\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "java-LF-prose",
+    "response": "설명\n```java\nclass Solution {\n\t// example\n\n    int answer = 1;\n}\n```\n설명 끝",
+    "expectedCode": "class Solution {\n\t// example\n\n    int answer = 1;\n}\n",
+    "error": null,
+    "codeBlocks": [
+      {
+        "text": "class Solution {\n\t// example\n\n    int answer = 1;\n}\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "java-LF-multiple",
+    "response": "```java\nclass Solution {\n\t// example\n\n    int answer = 1;\n}\n```\n```java\nclass Solution {\n\t// example\n\n    int answer = 1;\n}\n```",
+    "expectedCode": null,
+    "error": "multipleCodeBlocks",
+    "codeBlocks": [
+      {
+        "text": "class Solution {\n\t// example\n\n    int answer = 1;\n}\n",
+        "isComplete": true
+      },
+      {
+        "text": "class Solution {\n\t// example\n\n    int answer = 1;\n}\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "java-LF-empty",
+    "response": "```java\n```",
+    "expectedCode": null,
+    "error": "emptyCode",
+    "codeBlocks": [
+      {
+        "text": "",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "java-LF-incomplete",
+    "response": "```java\nclass Solution {\n\t// example\n\n    int answer = 1;\n}\n",
+    "expectedCode": null,
+    "error": "incompleteCode",
+    "codeBlocks": [
+      {
+        "text": "class Solution {\n\t// example\n\n    int answer = 1;\n}\n",
+        "isComplete": false
+      }
+    ]
+  },
+  {
+    "name": "java-LF-raw",
+    "response": "class Solution {\n\t// example\n\n    int answer = 1;\n}\n",
+    "expectedCode": "class Solution {\n\t// example\n\n    int answer = 1;\n}\n",
+    "error": null,
+    "codeBlocks": [
+      {
+        "text": "class Solution {\n\t// example\n\n    int answer = 1;\n}\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "java-CRLF",
+    "response": "```java\r\nclass Solution {\r\n\t// example\r\n\r\n    int answer = 1;\r\n}\r\n```",
+    "expectedCode": "class Solution {\r\n\t// example\r\n\r\n    int answer = 1;\r\n}\r\n",
+    "error": null,
+    "codeBlocks": [
+      {
+        "text": "class Solution {\r\n\t// example\r\n\r\n    int answer = 1;\r\n}\r\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "java-CRLF-prose",
+    "response": "설명\r\n```java\r\nclass Solution {\r\n\t// example\r\n\r\n    int answer = 1;\r\n}\r\n```\r\n설명 끝",
+    "expectedCode": "class Solution {\r\n\t// example\r\n\r\n    int answer = 1;\r\n}\r\n",
+    "error": null,
+    "codeBlocks": [
+      {
+        "text": "class Solution {\r\n\t// example\r\n\r\n    int answer = 1;\r\n}\r\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "java-CRLF-multiple",
+    "response": "```java\r\nclass Solution {\r\n\t// example\r\n\r\n    int answer = 1;\r\n}\r\n```\r\n```java\r\nclass Solution {\r\n\t// example\r\n\r\n    int answer = 1;\r\n}\r\n```",
+    "expectedCode": null,
+    "error": "multipleCodeBlocks",
+    "codeBlocks": [
+      {
+        "text": "class Solution {\r\n\t// example\r\n\r\n    int answer = 1;\r\n}\r\n",
+        "isComplete": true
+      },
+      {
+        "text": "class Solution {\r\n\t// example\r\n\r\n    int answer = 1;\r\n}\r\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "java-CRLF-empty",
+    "response": "```java\r\n```",
+    "expectedCode": null,
+    "error": "emptyCode",
+    "codeBlocks": [
+      {
+        "text": "",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "java-CRLF-incomplete",
+    "response": "```java\r\nclass Solution {\r\n\t// example\r\n\r\n    int answer = 1;\r\n}\r\n",
+    "expectedCode": null,
+    "error": "incompleteCode",
+    "codeBlocks": [
+      {
+        "text": "class Solution {\r\n\t// example\r\n\r\n    int answer = 1;\r\n}\r\n",
+        "isComplete": false
+      }
+    ]
+  },
+  {
+    "name": "java-CRLF-raw",
+    "response": "class Solution {\r\n\t// example\r\n\r\n    int answer = 1;\r\n}\r\n",
+    "expectedCode": "class Solution {\r\n\t// example\r\n\r\n    int answer = 1;\r\n}\r\n",
+    "error": null,
+    "codeBlocks": [
+      {
+        "text": "class Solution {\r\n\t// example\r\n\r\n    int answer = 1;\r\n}\r\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "python-LF",
+    "response": "```python\n# example\ndef solve():\n\tprint(1)\n\nsolve()\n```",
+    "expectedCode": "# example\ndef solve():\n\tprint(1)\n\nsolve()\n",
+    "error": null,
+    "codeBlocks": [
+      {
+        "text": "# example\ndef solve():\n\tprint(1)\n\nsolve()\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "python-LF-prose",
+    "response": "설명\n```python\n# example\ndef solve():\n\tprint(1)\n\nsolve()\n```\n설명 끝",
+    "expectedCode": "# example\ndef solve():\n\tprint(1)\n\nsolve()\n",
+    "error": null,
+    "codeBlocks": [
+      {
+        "text": "# example\ndef solve():\n\tprint(1)\n\nsolve()\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "python-LF-multiple",
+    "response": "```python\n# example\ndef solve():\n\tprint(1)\n\nsolve()\n```\n```python\n# example\ndef solve():\n\tprint(1)\n\nsolve()\n```",
+    "expectedCode": null,
+    "error": "multipleCodeBlocks",
+    "codeBlocks": [
+      {
+        "text": "# example\ndef solve():\n\tprint(1)\n\nsolve()\n",
+        "isComplete": true
+      },
+      {
+        "text": "# example\ndef solve():\n\tprint(1)\n\nsolve()\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "python-LF-empty",
+    "response": "```python\n```",
+    "expectedCode": null,
+    "error": "emptyCode",
+    "codeBlocks": [
+      {
+        "text": "",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "python-LF-incomplete",
+    "response": "```python\n# example\ndef solve():\n\tprint(1)\n\nsolve()\n",
+    "expectedCode": null,
+    "error": "incompleteCode",
+    "codeBlocks": [
+      {
+        "text": "# example\ndef solve():\n\tprint(1)\n\nsolve()\n",
+        "isComplete": false
+      }
+    ]
+  },
+  {
+    "name": "python-LF-raw",
+    "response": "# example\ndef solve():\n\tprint(1)\n\nsolve()\n",
+    "expectedCode": null,
+    "error": "noCode",
+    "codeBlocks": []
+  },
+  {
+    "name": "python-CRLF",
+    "response": "```python\r\n# example\r\ndef solve():\r\n\tprint(1)\r\n\r\nsolve()\r\n```",
+    "expectedCode": "# example\r\ndef solve():\r\n\tprint(1)\r\n\r\nsolve()\r\n",
+    "error": null,
+    "codeBlocks": [
+      {
+        "text": "# example\r\ndef solve():\r\n\tprint(1)\r\n\r\nsolve()\r\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "python-CRLF-prose",
+    "response": "설명\r\n```python\r\n# example\r\ndef solve():\r\n\tprint(1)\r\n\r\nsolve()\r\n```\r\n설명 끝",
+    "expectedCode": "# example\r\ndef solve():\r\n\tprint(1)\r\n\r\nsolve()\r\n",
+    "error": null,
+    "codeBlocks": [
+      {
+        "text": "# example\r\ndef solve():\r\n\tprint(1)\r\n\r\nsolve()\r\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "python-CRLF-multiple",
+    "response": "```python\r\n# example\r\ndef solve():\r\n\tprint(1)\r\n\r\nsolve()\r\n```\r\n```python\r\n# example\r\ndef solve():\r\n\tprint(1)\r\n\r\nsolve()\r\n```",
+    "expectedCode": null,
+    "error": "multipleCodeBlocks",
+    "codeBlocks": [
+      {
+        "text": "# example\r\ndef solve():\r\n\tprint(1)\r\n\r\nsolve()\r\n",
+        "isComplete": true
+      },
+      {
+        "text": "# example\r\ndef solve():\r\n\tprint(1)\r\n\r\nsolve()\r\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "python-CRLF-empty",
+    "response": "```python\r\n```",
+    "expectedCode": null,
+    "error": "emptyCode",
+    "codeBlocks": [
+      {
+        "text": "",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "python-CRLF-incomplete",
+    "response": "```python\r\n# example\r\ndef solve():\r\n\tprint(1)\r\n\r\nsolve()\r\n",
+    "expectedCode": null,
+    "error": "incompleteCode",
+    "codeBlocks": [
+      {
+        "text": "# example\r\ndef solve():\r\n\tprint(1)\r\n\r\nsolve()\r\n",
+        "isComplete": false
+      }
+    ]
+  },
+  {
+    "name": "python-CRLF-raw",
+    "response": "# example\r\ndef solve():\r\n\tprint(1)\r\n\r\nsolve()\r\n",
+    "expectedCode": null,
+    "error": "noCode",
+    "codeBlocks": []
+  },
+  {
+    "name": "cpp-LF",
+    "response": "```cpp\n#include <iostream>\n// example\nint main() {\n\tstd::cout << 1;\n}\n```",
+    "expectedCode": "#include <iostream>\n// example\nint main() {\n\tstd::cout << 1;\n}\n",
+    "error": null,
+    "codeBlocks": [
+      {
+        "text": "#include <iostream>\n// example\nint main() {\n\tstd::cout << 1;\n}\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "cpp-LF-prose",
+    "response": "설명\n```cpp\n#include <iostream>\n// example\nint main() {\n\tstd::cout << 1;\n}\n```\n설명 끝",
+    "expectedCode": "#include <iostream>\n// example\nint main() {\n\tstd::cout << 1;\n}\n",
+    "error": null,
+    "codeBlocks": [
+      {
+        "text": "#include <iostream>\n// example\nint main() {\n\tstd::cout << 1;\n}\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "cpp-LF-multiple",
+    "response": "```cpp\n#include <iostream>\n// example\nint main() {\n\tstd::cout << 1;\n}\n```\n```cpp\n#include <iostream>\n// example\nint main() {\n\tstd::cout << 1;\n}\n```",
+    "expectedCode": null,
+    "error": "multipleCodeBlocks",
+    "codeBlocks": [
+      {
+        "text": "#include <iostream>\n// example\nint main() {\n\tstd::cout << 1;\n}\n",
+        "isComplete": true
+      },
+      {
+        "text": "#include <iostream>\n// example\nint main() {\n\tstd::cout << 1;\n}\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "cpp-LF-empty",
+    "response": "```cpp\n```",
+    "expectedCode": null,
+    "error": "emptyCode",
+    "codeBlocks": [
+      {
+        "text": "",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "cpp-LF-incomplete",
+    "response": "```cpp\n#include <iostream>\n// example\nint main() {\n\tstd::cout << 1;\n}\n",
+    "expectedCode": null,
+    "error": "incompleteCode",
+    "codeBlocks": [
+      {
+        "text": "#include <iostream>\n// example\nint main() {\n\tstd::cout << 1;\n}\n",
+        "isComplete": false
+      }
+    ]
+  },
+  {
+    "name": "cpp-LF-raw",
+    "response": "#include <iostream>\n// example\nint main() {\n\tstd::cout << 1;\n}\n",
+    "expectedCode": null,
+    "error": "noCode",
+    "codeBlocks": []
+  },
+  {
+    "name": "cpp-CRLF",
+    "response": "```cpp\r\n#include <iostream>\r\n// example\r\nint main() {\r\n\tstd::cout << 1;\r\n}\r\n```",
+    "expectedCode": "#include <iostream>\r\n// example\r\nint main() {\r\n\tstd::cout << 1;\r\n}\r\n",
+    "error": null,
+    "codeBlocks": [
+      {
+        "text": "#include <iostream>\r\n// example\r\nint main() {\r\n\tstd::cout << 1;\r\n}\r\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "cpp-CRLF-prose",
+    "response": "설명\r\n```cpp\r\n#include <iostream>\r\n// example\r\nint main() {\r\n\tstd::cout << 1;\r\n}\r\n```\r\n설명 끝",
+    "expectedCode": "#include <iostream>\r\n// example\r\nint main() {\r\n\tstd::cout << 1;\r\n}\r\n",
+    "error": null,
+    "codeBlocks": [
+      {
+        "text": "#include <iostream>\r\n// example\r\nint main() {\r\n\tstd::cout << 1;\r\n}\r\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "cpp-CRLF-multiple",
+    "response": "```cpp\r\n#include <iostream>\r\n// example\r\nint main() {\r\n\tstd::cout << 1;\r\n}\r\n```\r\n```cpp\r\n#include <iostream>\r\n// example\r\nint main() {\r\n\tstd::cout << 1;\r\n}\r\n```",
+    "expectedCode": null,
+    "error": "multipleCodeBlocks",
+    "codeBlocks": [
+      {
+        "text": "#include <iostream>\r\n// example\r\nint main() {\r\n\tstd::cout << 1;\r\n}\r\n",
+        "isComplete": true
+      },
+      {
+        "text": "#include <iostream>\r\n// example\r\nint main() {\r\n\tstd::cout << 1;\r\n}\r\n",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "cpp-CRLF-empty",
+    "response": "```cpp\r\n```",
+    "expectedCode": null,
+    "error": "emptyCode",
+    "codeBlocks": [
+      {
+        "text": "",
+        "isComplete": true
+      }
+    ]
+  },
+  {
+    "name": "cpp-CRLF-incomplete",
+    "response": "```cpp\r\n#include <iostream>\r\n// example\r\nint main() {\r\n\tstd::cout << 1;\r\n}\r\n",
+    "expectedCode": null,
+    "error": "incompleteCode",
+    "codeBlocks": [
+      {
+        "text": "#include <iostream>\r\n// example\r\nint main() {\r\n\tstd::cout << 1;\r\n}\r\n",
+        "isComplete": false
+      }
+    ]
+  },
+  {
+    "name": "cpp-CRLF-raw",
+    "response": "#include <iostream>\r\n// example\r\nint main() {\r\n\tstd::cout << 1;\r\n}\r\n",
+    "expectedCode": null,
+    "error": "noCode",
+    "codeBlocks": []
+  },
+  {
+    "name": "no-code",
+    "response": "그림에서 누락된 선로 방향을 알려 주세요.",
+    "expectedCode": null,
+    "error": "noCode",
+    "codeBlocks": []
+  }
+]
