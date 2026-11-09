@@ -1,5 +1,6 @@
 use super::{CaptureError, SelectionError};
 use serde_json::{json, Value};
+use std::os::unix::fs::DirBuilderExt;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
@@ -32,16 +33,46 @@ pub async fn capture_region(_app: &tauri::AppHandle, prompt: bool) -> Result<Vec
     if !granted {
         return Err(CaptureError::PermissionDenied);
     }
-    let target = std::env::temp_dir().join(format!("StudyLens-{}.png", uuid::Uuid::new_v4()));
-    let status = Command::new("/usr/sbin/screencapture")
-        .args(["-i", "-s", "-x", "-t", "png"])
-        .arg(&target)
+    let capture = CaptureDirectory::new()?;
+    let mut command = Command::new("/usr/sbin/screencapture");
+    command.args(["-i", "-s", "-x", "-t", "png"]).arg(capture.image_path());
+    capture_output(command, capture).await
+}
+
+/// Removing the directory also prevents a cancelled child from recreating its output
+/// after cleanup. Only this capture owns the directory; no other app's files are touched.
+struct CaptureDirectory(PathBuf);
+
+impl CaptureDirectory {
+    fn new() -> Result<Self, CaptureError> {
+        let path = std::env::temp_dir().join(format!("StudyLens-{}", uuid::Uuid::new_v4()));
+        std::fs::DirBuilder::new().mode(0o700).create(&path)
+            .map_err(|e| CaptureError::LaunchFailed(e.to_string()))?;
+        Ok(Self(path))
+    }
+
+    fn image_path(&self) -> PathBuf {
+        self.0.join("capture.png")
+    }
+}
+
+impl Drop for CaptureDirectory {
+    fn drop(&mut self) {
+        if let Err(error) = std::fs::remove_dir_all(&self.0) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                eprintln!("capture cleanup failed: {error}");
+            }
+        }
+    }
+}
+
+async fn capture_output(mut command: Command, capture: CaptureDirectory) -> Result<Vec<u8>, CaptureError> {
+    let status = command
         .kill_on_drop(true)
         .status()
         .await
         .map_err(|e| CaptureError::LaunchFailed(e.to_string()))?;
-    let data = tokio::fs::read(&target).await.ok();
-    let _ = tokio::fs::remove_file(&target).await;
+    let data = tokio::fs::read(capture.image_path()).await.ok();
     if !status.success() {
         return Err(CaptureError::Cancelled);
     }
@@ -150,4 +181,82 @@ fn spawn_helper() -> Result<Helper, SelectionError> {
     let stdin = child.stdin.take().expect("piped stdin");
     let stdout = BufReader::new(child.stdout.take().expect("piped stdout")).lines();
     Ok(Helper { _child: child, stdin, stdout, next_id: 0 })
+}
+
+#[cfg(test)]
+mod capture_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    fn synthetic_command(script: &str, capture: &CaptureDirectory) -> Command {
+        let mut command = Command::new("/bin/sh");
+        command.args(["-c", script, "capture-test"]).arg(capture.image_path());
+        command
+    }
+
+    #[tokio::test]
+    async fn success_reads_output_and_removes_private_directory() {
+        let capture = CaptureDirectory::new().unwrap();
+        let directory = capture.0.clone();
+        assert_eq!(std::fs::metadata(&directory).unwrap().permissions().mode() & 0o777, 0o700);
+        let command = synthetic_command("printf synthetic-image > \"$1\"", &capture);
+        assert_eq!(capture_output(command, capture).await.unwrap(), b"synthetic-image");
+        assert!(!directory.exists());
+    }
+
+    #[tokio::test]
+    async fn selection_cancel_without_output_removes_directory() {
+        let capture = CaptureDirectory::new().unwrap();
+        let directory = capture.0.clone();
+        let command = synthetic_command("exit 0", &capture);
+        assert_eq!(capture_output(command, capture).await, Err(CaptureError::Cancelled));
+        assert!(!directory.exists());
+    }
+
+    #[tokio::test]
+    async fn empty_output_removes_directory() {
+        let capture = CaptureDirectory::new().unwrap();
+        let directory = capture.0.clone();
+        let command = synthetic_command(": > \"$1\"", &capture);
+        assert_eq!(capture_output(command, capture).await, Err(CaptureError::Empty));
+        assert!(!directory.exists());
+    }
+
+    #[tokio::test]
+    async fn failed_capture_removes_partial_output() {
+        let capture = CaptureDirectory::new().unwrap();
+        let directory = capture.0.clone();
+        let command = synthetic_command("printf partial-image > \"$1\"; exit 1", &capture);
+        assert_eq!(capture_output(command, capture).await, Err(CaptureError::Cancelled));
+        assert!(!directory.exists());
+    }
+
+    #[tokio::test]
+    async fn launch_failure_removes_directory() {
+        let capture = CaptureDirectory::new().unwrap();
+        let directory = capture.0.clone();
+        let command = Command::new(directory.join("missing-executable"));
+        assert!(matches!(capture_output(command, capture).await, Err(CaptureError::LaunchFailed(_))));
+        assert!(!directory.exists());
+    }
+
+    #[tokio::test]
+    async fn abort_during_capture_removes_written_image_and_directory() {
+        let capture = CaptureDirectory::new().unwrap();
+        let directory = capture.0.clone();
+        let image = capture.image_path();
+        let command = synthetic_command("printf private-synthetic-image > \"$1\"; exec /bin/sleep 30", &capture);
+        let task = tokio::spawn(capture_output(command, capture));
+        let written = tokio::time::timeout(Duration::from_secs(5), async {
+            while !image.exists() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        }).await;
+        task.abort();
+        let stopped = task.await;
+        assert!(written.is_ok(), "synthetic capture did not create its output");
+        assert!(stopped.unwrap_err().is_cancelled());
+        assert!(!image.exists());
+        assert!(!directory.exists());
+    }
 }
