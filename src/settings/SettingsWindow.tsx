@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, isMac, useSettingsView, type BillingMode, type Settings, type SettingsView, type Shortcuts } from "../lib/ipc";
 import { acceleratorFromEvent, displayAccelerator } from "../lib/shortcut";
 
@@ -159,26 +159,60 @@ function InputSection({ view, save }: { view: SettingsView; save: Save }) {
   );
 }
 
-function PermissionSection() {
-  const [status, setStatus] = useState<{ accessibility: boolean; screenRecording: boolean } | null>(null);
-  useEffect(() => {
-    const refresh = () => api.permissionStatus().then(setStatus);
-    refresh();
-    window.addEventListener("focus", refresh);
-    return () => window.removeEventListener("focus", refresh);
+type PermissionState =
+  | { kind: "loading" }
+  | { kind: "failed" }
+  | { kind: "unavailable" }
+  | { kind: "ready"; accessibility: boolean; screenRecording: boolean };
+
+export function PermissionSection() {
+  const [status, setStatus] = useState<PermissionState>({ kind: "loading" });
+  const requestId = useRef(0);
+  const refresh = useCallback(async () => {
+    const id = ++requestId.current;
+    setStatus({ kind: "loading" });
+    try {
+      const result = await api.permissionStatus();
+      if (id === requestId.current) {
+        setStatus(result === null ? { kind: "unavailable" } : { kind: "ready", ...result });
+      }
+    } catch {
+      if (id === requestId.current) setStatus({ kind: "failed" });
+    }
   }, []);
-  const badge = (ok: boolean | undefined) => (ok ? <span className="ok">● 사용 가능</span> : <span className="warn">● 접근 불가</span>);
+  useEffect(() => {
+    void refresh();
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      ++requestId.current;
+    };
+  }, [refresh]);
+  const badge = (kind: "accessibility" | "screenRecording") => {
+    if (status.kind === "loading") return <span>확인 중…</span>;
+    if (status.kind !== "ready") return <span>확인 불가</span>;
+    return status[kind] ? <span className="ok">● 사용 가능</span> : <span className="warn">● 접근 불가</span>;
+  };
   return (
     <Section
       title="권한"
       note="macOS가 지금 실행 중인 StudyLens에 허용한 상태입니다. 업데이트 후 스위치가 켜져 있어도 접근 불가로 보이면 목록에서 StudyLens를 지우고 다시 추가한 뒤 재실행하세요."
     >
+      <div className="row">
+        <span className="row-label" role="status">
+          {status.kind === "loading" && "권한 상태를 확인하고 있습니다."}
+          {status.kind === "failed" && "권한 상태를 불러오지 못했습니다. 다시 확인해 주세요."}
+          {status.kind === "unavailable" && "이 환경에서는 macOS 권한 상태를 확인할 수 없습니다."}
+          {status.kind === "ready" && "권한 상태를 확인했습니다."}
+        </span>
+        <button className="btn small" disabled={status.kind === "loading"} onClick={() => void refresh()}>다시 확인</button>
+      </div>
       <Row label="손쉬운 사용" detail="선택 텍스트 읽기">
-        {badge(status?.accessibility)}
+        {badge("accessibility")}
         <button className="btn small" onClick={() => api.openPrivacySettings("accessibility")}>열기</button>
       </Row>
       <Row label="화면 기록" detail="영역 캡처·그림 첨부">
-        {badge(status?.screenRecording)}
+        {badge("screenRecording")}
         <button className="btn small" onClick={() => api.openPrivacySettings("screen")}>열기</button>
       </Row>
     </Section>

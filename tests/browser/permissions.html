@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ko">
+  <head><meta charset="utf-8"><title>권한 상태 회귀 검사</title></head>
+  <body>
+    <div id="root" class="settings"></div>
+    <script type="module">
+      import React from "react";
+      import { createRoot } from "react-dom/client";
+      import { api } from "/src/lib/ipc.ts";
+      import { PermissionSection } from "/src/settings/SettingsWindow.tsx";
+      import "/src/styles/base.css";
+      import "/src/settings/settings.css";
+
+      // Deferred IPC responses exercise the real component without OS permissions,
+      // credentials, AI requests, or a Tauri process.
+      window.permissionQa = { requests: [], opened: [] };
+      api.permissionStatus = () => new Promise((resolve, reject) => {
+        window.permissionQa.requests.push({ resolve, reject });
+      });
+      api.openPrivacySettings = async (kind) => { window.permissionQa.opened.push(kind); };
+      createRoot(document.getElementById("root")).render(
+        React.createElement("main", { className: "sections" }, React.createElement(PermissionSection)),
+      );
+    </script>
+  </body>
+</html>
