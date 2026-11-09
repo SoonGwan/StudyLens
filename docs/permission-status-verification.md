@@ -35,3 +35,14 @@ ego-browser nodejs < scripts/test-permissions-browser.mjs
 `tests/browser/permissions.html`은 개발 서버에서만 쓰는 모의 IPC 페이지입니다.
 제품의 Vite 빌드 입력에는 포함하지 않습니다. AI·키체인·클립보드·시스템 권한을 호출하지 않습니다.
 검사 중 브라우저의 실제 focus 이벤트를 받은 뒤 응답 순서를 제어하므로, 검사 페이지를 조작하지 않은 상태로 실행합니다.
+
+## macOS 릴리스 산출물 검사
+
+앱 소스 `274b45f`, macOS ARM64에서 `CARGO_BUILD_JOBS=4 bun run app:build` 성공.
+생성 앱 6.64 MiB, DMG 4.98 MiB입니다. `.app`·도우미 모두 arm64이고 번들 ID는 `com.studylens.desktop`입니다.
+
+- `codesign --verify --deep --strict --verbose=2 .../StudyLens.app` 통과(앱과 번들 도우미).
+- `hdiutil verify .../StudyLens_0.3.0_aarch64.dmg` 통과.
+- 해당 DMG SHA-256: `50a14e433f62f57f49f0148a384be4fa8139d74c3e6a7075a6e9d1131ce03177`.
+- `Signature=adhoc`, TeamIdentifier 없음. 인증서 서명·공증은 수행하지 않았습니다.
+- 빌드된 앱을 설치·실행하거나 실제 권한을 변경하지 않았습니다. 업데이트 후 권한 유지 검증은 남아 있습니다.
