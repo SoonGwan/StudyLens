@@ -17,6 +17,7 @@ AI 연결·추론 속도 비교를 독립적으로 진행할 수 있습니다.
 - 변경 전 TypeScript 검사와 프런트엔드 테스트 7개 통과.
 - 변경 전 Swift 테스트는 로컬 Command Line Tools의 XCTest 모듈 부재로 실패.
 - 변경 후 `bun run build`(타입 검사 포함), `bunx vitest run` 7개 통과.
+- `cargo test --manifest-path src-tauri/Cargo.toml --locked`: Rust 67개 및 문서 테스트 통과.
 - `bun run test:helper`: 실제 Swift 도우미 빌드와 프로토콜 7개 통과. XCTest 모듈을 요구하는 Swift 단위 테스트와는 별도 검사입니다.
 - Ego 브라우저에서 모의 IPC로 조회 중·실패·수동 재조회·부분 허용·창 복귀·이전 조회의 늦은 실패/성공·사용 불가 응답·복구·두 설정 링크 호출을 검증했습니다. 실제 OS 권한 변경은 하지 않았습니다.
 - 현재 컴포넌트를 직접 렌더링하는 브라우저 검사이며 Tauri 앱 전체 E2E나 실제 업데이트 검증을 대신하지 않습니다.
